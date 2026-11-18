@@ -1,0 +1,17 @@
+---
+# Role: infra — entry point
+- name: Proxmox host setup (repos, upgrade, storage, sysctl)
+  ansible.builtin.include_tasks: host.yml
+  when: infra_run_host | bool
+
+- name: Ubuntu cloud-init template
+  ansible.builtin.include_tasks: template.yml
+  when: infra_run_host | bool
+
+- name: Terraform API user + token
+  ansible.builtin.include_tasks: api_token.yml
+  when: infra_run_host | bool
+
+- name: VMs (Terraform)
+  ansible.builtin.include_tasks: vms.yml
+  when: infra_run_vms | bool

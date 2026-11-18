@@ -1,0 +1,8 @@
+---
+# Proxmox host connection. Change the default IP to your server.
+ansible_host: "{{ lookup('env', 'PVE_HOST') | default('192.168.1.10', true) }}"
+ansible_user: root
+
+# Role overrides for this host go here, e.g.:
+# infra_swappiness: 10
+# infra_template_id: 9000

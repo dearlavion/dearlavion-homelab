@@ -42,3 +42,9 @@ variable "ssh_public_key_path" {
   type        = string
   default     = "~/.ssh/id_ed25519.pub"
 }
+
+variable "extra_ssh_keys" {
+  description = "More public keys allowed to log in to the VMs (e.g. your laptop)"
+  type        = list(string)
+  default     = []
+}

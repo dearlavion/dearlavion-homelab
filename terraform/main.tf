@@ -88,7 +88,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
     user_account {
       username = "ubuntu"
-      keys     = [trimspace(file(pathexpand(var.ssh_public_key_path)))]
+      keys     = concat([trimspace(file(pathexpand(var.ssh_public_key_path)))], var.extra_ssh_keys)
     }
 
     vendor_data_file_id = "local:snippets/vendor.yaml"

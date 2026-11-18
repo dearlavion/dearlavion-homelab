@@ -1,26 +1,30 @@
-.PHONY: help host vms plan destroy ping all
+# Run from the repo root. Rename to Makefile:  mv Makefile.example Makefile
+.PHONY: help infra host vms plan ping destroy
+
+PLAY = cd ansible && ansible-playbook playbook/site.yml
 
 help:
-	@echo "make host     - Ansible: prepare Proxmox host + build template 9000"
-	@echo "make plan     - Terraform: preview VM changes"
-	@echo "make vms      - Terraform: create/update VMs 100-103"
-	@echo "make ping     - Ansible: check all VMs answer"
-	@echo "make destroy  - Terraform: delete VMs 100-103 (template stays)"
-	@echo "make all      - host + vms + ping"
+	@echo "make infra    - host setup + template + token + VMs   (target=infra)"
+	@echo "make host     - host setup + template + token         (target=infra-host)"
+	@echo "make vms      - VMs via Terraform, with safety check  (target=infra-vms)"
+	@echo "make plan     - Terraform plan only (no changes)"
+	@echo "make ping     - check all VMs answer"
+	@echo "make destroy  - delete VMs 100-103 (template stays)"
+
+infra:
+	$(PLAY) -e target=infra
 
 host:
-	cd ansible && ansible-playbook pve-host.yml
-
-plan:
-	cd terraform && terraform init -upgrade && terraform plan
+	$(PLAY) -e target=infra-host
 
 vms:
-	cd terraform && terraform init -upgrade && terraform apply
+	$(PLAY) -e target=infra-vms
+
+plan:
+	cd terraform && terraform init && terraform plan
 
 ping:
 	cd ansible && ansible vms -m ping
 
 destroy:
 	cd terraform && terraform destroy
-
-all: host vms ping

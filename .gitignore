@@ -4,6 +4,13 @@ terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/terraform.tfvars
 terraform/*.auto.tfvars
+terraform/tfplan
 
 # Generated
 ansible/inventory/k8s.ini
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/

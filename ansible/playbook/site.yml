@@ -1,0 +1,44 @@
+---
+# site.yml — homelab orchestrator. Run from ansible/:
+#
+#   ansible-playbook playbook/site.yml -e "target=infra"        # host + VMs
+#   ansible-playbook playbook/site.yml -e "target=infra-host"   # host + template + token
+#   ansible-playbook playbook/site.yml -e "target=infra-vms"    # VMs only (Terraform)
+#
+# Add future automations as new roles + run_<name> gates below.
+
+- name: Homelab infrastructure (Proxmox host + VMs)
+  hosts: proxmox
+  gather_facts: true
+
+  vars:
+    _target: "{{ target | default('infra') }}"
+    run_infra_host: "{{ _target in ['all', 'infra', 'infra-host'] }}"
+    run_infra_vms: "{{ _target in ['all', 'infra', 'infra-vms'] }}"
+
+  tasks:
+    - name: Infra (Proxmox host + VMs)
+      ansible.builtin.include_role:
+        name: infra
+      vars:
+        infra_run_host: "{{ run_infra_host }}"
+        infra_run_vms: "{{ run_infra_vms }}"
+      when: run_infra_host or run_infra_vms
+
+- name: Wait for VMs to accept SSH
+  hosts: vms
+  gather_facts: false
+
+  vars:
+    _target: "{{ target | default('infra') }}"
+
+  tasks:
+    - name: Wait for SSH on each VM (first boot runs cloud-init)
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+      when: _target in ['all', 'infra', 'infra-vms']
+
+    - name: Final sanity check
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} ({{ ansible_host }}) is reachable"
+      when: _target in ['all', 'infra', 'infra-vms']

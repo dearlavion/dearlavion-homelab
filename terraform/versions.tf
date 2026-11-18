@@ -1,6 +1,10 @@
 terraform {
   required_version = ">= 1.5"
 
+  # Local state. CI stores it on the Proxmox host via:
+  #   terraform init -backend-config="path=/var/lib/homelab-state/terraform.tfstate"
+  backend "local" {}
+
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"

@@ -1,0 +1,130 @@
+# homelab-deploy-infra.yml
+# Proxmox host setup + VMs (ansible/roles/infra + terraform/)
+name: homelab-deploy-infra
+
+on:
+  push:
+    branches: [dev]
+    # Only infra changes trigger this; other automations in this repo won't.
+    paths:
+      - "ansible/roles/infra/**"
+      - "ansible/playbook/site.yml"
+      - "ansible/inventory/**"
+      - "ansible/ansible.cfg"
+      - "terraform/**"
+      - "toolbox/**"
+      - "ci/**"
+      - ".github/workflows/homelab-deploy-infra.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to deploy"
+        required: true
+        type: choice
+        default: infra
+        options:
+          - infra        # Proxmox host + VMs
+          - infra-host   # host setup, template 9000, API token
+          - infra-vms    # VMs 100-103 (Terraform)
+      allow_destroy:
+        description: "Allow Terraform to delete/replace VMs | default(false)"
+        required: false
+        type: boolean
+        default: false
+      full_upgrade:
+        description: "Run apt full-upgrade on the Proxmox host | default(false)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+# Never run two homelab deploys at once (shared Terraform state)
+concurrency:
+  group: homelab-deploy-infra
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/dearlavion/dearlavion-homelab-toolbox
+
+jobs:
+  # ----------------------------
+  # 1. Build toolbox image (Ansible + Terraform) on GitHub, push to GHCR
+  # ----------------------------
+  build-toolbox:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push Image
+        uses: docker/build-push-action@v6
+        with:
+          context: toolbox
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:dev
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ----------------------------
+  # 2. Self-hosted runner on the Proxmox host (inside your LAN):
+  #    pull the toolbox and run Ansible + Terraform in it
+  # ----------------------------
+  deploy:
+    needs: build-toolbox
+    runs-on: [self-hosted, pve]
+    permissions:
+      contents: read
+      packages: read
+    env:
+      STATE_DIR: /var/lib/homelab-state
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Pull toolbox image
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          podman pull "$IMAGE:${{ github.sha }}"
+
+      - name: Run playbook/site.yml (infra role)
+        env:
+          TARGET: ${{ inputs.target || 'infra' }}
+          ALLOW_DESTROY: ${{ inputs.allow_destroy == true || contains(github.event.head_commit.message, '[allow-destroy]') }}
+          PVE_FULL_UPGRADE: ${{ inputs.full_upgrade == true }}
+        run: |
+          podman run --rm --network host \
+            -v "$GITHUB_WORKSPACE":/work \
+            -v "$STATE_DIR":/state \
+            -v "$HOME/.ssh":/ssh-ro:ro \
+            -e TARGET="$TARGET" \
+            -e PVE_HOST='${{ vars.PVE_HOST }}' \
+            -e TF_VAR_pve_endpoint='${{ vars.PVE_ENDPOINT }}' \
+            -e TF_VAR_pve_node='${{ vars.PVE_NODE || 'pve' }}' \
+            -e TF_VAR_net_prefix='${{ vars.NET_PREFIX }}' \
+            -e TF_VAR_gateway='${{ vars.GATEWAY }}' \
+            -e VM_EXTRA_SSH_KEY='${{ vars.VM_EXTRA_SSH_KEY }}' \
+            -e ALLOW_DESTROY="$ALLOW_DESTROY" \
+            -e PVE_FULL_UPGRADE="$PVE_FULL_UPGRADE" \
+            "$IMAGE:${{ github.sha }}" \
+            bash /work/ci/run.sh
+
+      - name: Clean up old toolbox images
+        if: always()
+        run: podman image prune -af --filter "until=72h" || true

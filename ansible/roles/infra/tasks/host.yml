@@ -1,0 +1,69 @@
+---
+# ----------------------------
+# Package repositories: enterprise off, no-subscription on
+# ----------------------------
+- name: Check which enterprise repo files exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/apt/sources.list.d/pve-enterprise.sources   # PVE 9
+    - /etc/apt/sources.list.d/ceph.sources             # PVE 9
+    - /etc/apt/sources.list.d/pve-enterprise.list      # PVE 8
+    - /etc/apt/sources.list.d/ceph.list                # PVE 8
+  register: infra_repo_files
+
+- name: Disable enterprise repos (PVE 9, deb822 format)
+  ansible.builtin.lineinfile:
+    path: "{{ item }}"
+    regexp: '^Enabled:'
+    line: 'Enabled: false'
+  loop: "{{ infra_repo_files.results | selectattr('stat.exists') | map(attribute='item') | select('search', '\\.sources$') | list }}"
+
+- name: Disable enterprise repos (PVE 8, one-line format)
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: '^deb '
+    replace: '# deb '
+  loop: "{{ infra_repo_files.results | selectattr('stat.exists') | map(attribute='item') | select('search', '\\.list$') | list }}"
+
+- name: Add no-subscription repo (PVE 9 / Debian trixie)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/proxmox.sources
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: http://download.proxmox.com/debian/pve
+      Suites: trixie
+      Components: pve-no-subscription
+      Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+  when: ansible_distribution_release == 'trixie'
+
+- name: Add no-subscription repo (PVE 8 / Debian bookworm)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/pve-no-subscription.list
+    mode: "0644"
+    content: "deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription\n"
+  when: ansible_distribution_release == 'bookworm'
+
+- name: Update package lists
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Install all upgrades
+  ansible.builtin.apt:
+    upgrade: dist
+  when: infra_full_upgrade | bool
+
+# ----------------------------
+# Storage + tuning
+# ----------------------------
+- name: Allow only iso/templates/backups/snippets on 'local' (no VM disks)
+  ansible.builtin.command: pvesm set local --content iso,vztmpl,backup,snippets
+  changed_when: false
+
+- name: Make the host use swap only as a last resort
+  ansible.posix.sysctl:
+    name: vm.swappiness
+    value: "{{ infra_swappiness }}"
+    sysctl_file: /etc/sysctl.d/99-swappiness.conf
+    reload: true

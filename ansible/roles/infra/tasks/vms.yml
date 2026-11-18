@@ -1,0 +1,84 @@
+---
+# ----------------------------
+# VMs 100-103 via Terraform (runs on the controller, talks to the Proxmox API)
+# Sizes/IPs live in terraform/main.tf.
+# ----------------------------
+- name: Check the API token file exists
+  ansible.builtin.stat:
+    path: "{{ infra_tf_token_file }}"
+  delegate_to: localhost
+  become: false
+  register: infra_vms_token_stat
+
+- name: Fail early without an API token
+  ansible.builtin.assert:
+    that: infra_vms_token_stat.stat.exists
+    fail_msg: "No API token at {{ infra_tf_token_file }}. Run with target=infra or infra-host first."
+    quiet: true
+
+- name: terraform init
+  ansible.builtin.command:
+    argv: >-
+      {{ ['terraform', 'init', '-input=false', '-reconfigure']
+         + (['-backend-config=path=' ~ infra_tf_state_path] if (infra_tf_state_path | length > 0) else []) }}
+    chdir: "{{ infra_terraform_dir }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: terraform plan
+  ansible.builtin.command:
+    argv:
+      - terraform
+      - plan
+      - -input=false
+      - -out=tfplan
+      - "-var-file={{ infra_tf_token_file }}"
+      - "-var=extra_ssh_keys={{ infra_extra_ssh_keys | to_json }}"
+    chdir: "{{ infra_terraform_dir }}"
+  delegate_to: localhost
+  become: false
+  register: infra_tf_plan
+  changed_when: false
+
+- name: Plan summary
+  ansible.builtin.debug:
+    msg: "{{ infra_tf_plan.stdout_lines | select('search', '^Plan:|No changes|will be (created|destroyed|updated|replaced)|must be replaced') | list }}"
+
+- name: Read plan as JSON
+  ansible.builtin.command:
+    argv: [terraform, show, -json, tfplan]
+    chdir: "{{ infra_terraform_dir }}"
+  delegate_to: localhost
+  become: false
+  register: infra_tf_plan_json
+  changed_when: false
+
+- name: Find VMs the plan would delete or replace
+  ansible.builtin.set_fact:
+    infra_vm_deletes: >-
+      {{ (infra_tf_plan_json.stdout | from_json).resource_changes | default([])
+         | selectattr('type', 'equalto', 'proxmox_virtual_environment_vm')
+         | selectattr('change.actions', 'contains', 'delete')
+         | map(attribute='address') | list }}
+
+- name: Safety check — block VM deletion unless allowed
+  ansible.builtin.assert:
+    that: infra_vm_deletes | length == 0 or infra_allow_destroy | bool
+    fail_msg: >-
+      Plan would DELETE or REPLACE: {{ infra_vm_deletes | join(', ') }}.
+      Not applying. Re-run with infra_allow_destroy=true
+      (CI: allow_destroy input or [allow-destroy] in the commit message).
+    quiet: true
+
+- name: terraform apply
+  ansible.builtin.command:
+    argv: [terraform, apply, -input=false, tfplan]
+    chdir: "{{ infra_terraform_dir }}"
+  delegate_to: localhost
+  become: false
+  register: infra_tf_apply
+  changed_when: "'0 added, 0 changed, 0 destroyed' not in infra_tf_apply.stdout"
+
+- name: Reload inventory (Terraform rewrote inventory/k8s.ini)
+  ansible.builtin.meta: refresh_inventory
