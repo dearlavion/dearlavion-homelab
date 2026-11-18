@@ -1,0 +1,9 @@
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfvars
+terraform/*.auto.tfvars
+
+# Generated
+ansible/inventory/k8s.ini

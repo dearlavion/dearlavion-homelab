@@ -1,0 +1,26 @@
+.PHONY: help host vms plan destroy ping all
+
+help:
+	@echo "make host     - Ansible: prepare Proxmox host + build template 9000"
+	@echo "make plan     - Terraform: preview VM changes"
+	@echo "make vms      - Terraform: create/update VMs 100-103"
+	@echo "make ping     - Ansible: check all VMs answer"
+	@echo "make destroy  - Terraform: delete VMs 100-103 (template stays)"
+	@echo "make all      - host + vms + ping"
+
+host:
+	cd ansible && ansible-playbook pve-host.yml
+
+plan:
+	cd terraform && terraform init -upgrade && terraform plan
+
+vms:
+	cd terraform && terraform init -upgrade && terraform apply
+
+ping:
+	cd ansible && ansible vms -m ping
+
+destroy:
+	cd terraform && terraform destroy
+
+all: host vms ping

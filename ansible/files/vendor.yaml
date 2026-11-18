@@ -1,0 +1,8 @@
+#cloud-config
+# Cloud-init "vendor data": runs on every VM's first boot,
+# in addition to the user/SSH key/IP that Proxmox injects.
+package_update: true
+packages:
+  - qemu-guest-agent
+runcmd:
+  - systemctl enable --now qemu-guest-agent
