@@ -1,0 +1,17 @@
+name: Deploy to Proxmox
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, proxmox-deploy]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test deployment
+        run: echo "Deploying dev branch to Proxmox!"
