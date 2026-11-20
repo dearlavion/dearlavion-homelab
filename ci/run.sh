@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Runs INSIDE the toolbox container on the Proxmox host (started by the workflow).
+# Runs INSIDE the toolbox container on vm-runner (VM 104), started by the workflow.
 #   /work   = repo checkout
-#   /state  = persistent folder on the host (Terraform state + API token)
+#   /state  = persistent folder on vm-runner (Terraform state + API token)
 #   /ssh-ro = the runner user's ~/.ssh (read-only)
 set -euo pipefail
 

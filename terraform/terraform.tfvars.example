@@ -2,8 +2,8 @@
 #   cp terraform.tfvars.example terraform.tfvars
 # (pve_api_token is NOT here: Ansible writes it to pve-token.auto.tfvars)
 
-pve_endpoint        = "https://192.168.1.10:8006/"
+pve_endpoint        = "https://192.168.8.50:8006/"
 pve_node            = "pve"
-net_prefix          = "192.168.1"
-gateway             = "192.168.1.1"
+net_prefix          = "192.168.8"
+gateway             = "192.168.8.1"
 ssh_public_key_path = "~/.ssh/id_ed25519.pub"

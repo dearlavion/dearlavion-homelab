@@ -1,5 +1,5 @@
 variable "pve_endpoint" {
-  description = "Proxmox web/API address, e.g. https://192.168.1.10:8006/"
+  description = "Proxmox web/API address, e.g. https://192.168.8.50:8006/"
   type        = string
 }
 
@@ -28,7 +28,7 @@ variable "vm_datastore" {
 }
 
 variable "net_prefix" {
-  description = "First three parts of your LAN, e.g. 192.168.1 (VM ID becomes the last part)"
+  description = "First three parts of your LAN, e.g. 192.168.8 (VM ID becomes the last part)"
   type        = string
 }
 

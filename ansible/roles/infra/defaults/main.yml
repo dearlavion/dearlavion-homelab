@@ -10,6 +10,8 @@ infra_run_vms: true           # terraform plan/apply for VMs 100-103
 # ---- Host ----
 infra_full_upgrade: true      # apt full-upgrade (CI passes false unless asked)
 infra_swappiness: 10
+# Content types allowed on 'local'. Keep 'images': vm-runner (104) has its disk there.
+infra_local_content: iso,vztmpl,backup,snippets,images,import
 
 # ---- Template ----
 infra_template_id: 9000

@@ -82,7 +82,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ----------------------------
-  # 2. Self-hosted runner on the Proxmox host (inside your LAN):
+  # 2. Self-hosted runner on vm-runner (VM 104, inside your LAN):
   #    pull the toolbox and run Ansible + Terraform in it
   # ----------------------------
   deploy:

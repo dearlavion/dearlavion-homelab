@@ -1,5 +1,5 @@
 # Toolbox image: everything needed to run this repo's Ansible + Terraform.
-# Built by GitHub Actions, pulled and run by the self-hosted runner on Proxmox.
+# Built by GitHub Actions, pulled and run by the self-hosted runner on vm-runner (VM 104).
 FROM python:3.12-slim-bookworm
 
 ENV ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections \

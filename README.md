@@ -1,4 +1,4 @@
-# Homelab: Proxmox + 4 VMs as code
+# Homelab: Proxmox + VMs as code
 
 ```
 ansible/
@@ -33,19 +33,25 @@ ci/run.sh                       # what CI runs inside the toolbox
 Future automations: add a role under `ansible/roles/`, a `run_<name>` gate in
 `playbook/site.yml`, and (if needed) its own workflow.
 
-| VM | Name | vCPU | RAM | Disk | IP |
-|---|---|---|---|---|---|
-| 100 | k8s-cp | 2 | 3 GB | 15G | .100 |
-| 101 | k8s-w1 | 2 | 3.5 GB | 20G | .101 |
-| 102 | k8s-w2 | 2 | 3.5 GB | 20G | .102 |
-| 103 | devops | 1 | 1.5 GB | 10G | .103 |
+Network: `192.168.8.0/24` · Proxmox `192.168.8.50` · gateway/DNS `192.168.8.1`
 
-All disks on `local-lvm`. `local` keeps only OS, snippets, backups.
+| VM | Name | vCPU | RAM | Disk | Storage | IP | Managed by |
+|---|---|---|---|---|---|---|---|
+| 9000 | ubuntu-2404-tmpl | — | — | ~3.5G | local-lvm | — | `infra` role |
+| 100 | k8s-cp | 2 | 3 GB | 15G | local-lvm | 192.168.8.100 | Terraform |
+| 101 | k8s-w1 | 2 | 3.5 GB | 20G | local-lvm | 192.168.8.101 | Terraform |
+| 102 | k8s-w2 | 2 | 3.5 GB | 20G | local-lvm | 192.168.8.102 | Terraform |
+| 103 | devops | 1 | 1.5 GB | 10G | local-lvm | 192.168.8.103 | Terraform |
+| 104 | vm-runner | 1 | 1 GB | 15G | **local** (qcow2) | 192.168.8.104 | **By hand** (GitHub runner) |
+
+VM 104 is deliberately **not** in Terraform, so a pipeline run can never
+delete its own runner. `local` keeps OS, snippets, backups and vm-runner's disk
+(the `infra` role keeps "Disk image" allowed there).
 
 ## CI/CD
 
 Push to the `dev` branch → GitHub builds a toolbox image (Ansible +
-Terraform) → a self-hosted runner on the Proxmox host pulls it and runs
+Terraform) → a self-hosted runner on **vm-runner (VM 104)** pulls it and runs
 `ci/run.sh` → `playbook/site.yml` (infra role). Workflow: `homelab-deploy-infra`.
 
 One-time runner setup and repo variables: **[docs/ci-setup.md](docs/ci-setup.md)**
@@ -75,8 +81,8 @@ sudo apt install -y ansible
 
 ```bash
 ls ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519
-ssh-copy-id root@192.168.1.10        # your Proxmox IP
-ssh root@192.168.1.10 pveversion     # should work without password
+ssh-copy-id root@192.168.8.50        # your Proxmox IP
+ssh root@192.168.8.50 pveversion     # should work without password
 ```
 
 ## 3. Edit your values

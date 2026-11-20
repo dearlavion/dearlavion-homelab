@@ -57,8 +57,8 @@
 # ----------------------------
 # Storage + tuning
 # ----------------------------
-- name: Allow only iso/templates/backups/snippets on 'local' (no VM disks)
-  ansible.builtin.command: pvesm set local --content iso,vztmpl,backup,snippets
+- name: Set allowed content on 'local' (keeps vm-runner's disk usable)
+  ansible.builtin.command: pvesm set local --content {{ infra_local_content }}
   changed_when: false
 
 - name: Make the host use swap only as a last resort
