@@ -8,6 +8,10 @@ set -euo pipefail
 : "${PVE_HOST:?set repo variable PVE_HOST}"   # read by inventory/group_vars/proxmox.yml
 TARGET="${TARGET:-infra}"
 
+# Docker runs as real root: hand files back to the runner user on exit,
+# otherwise the next actions/checkout cannot clean the workspace.
+trap 'chown -R "${HOST_UID:-0}:${HOST_GID:-0}" /work /state 2>/dev/null || true' EXIT
+
 # SSH key (copied so ssh can write known_hosts)
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
 cp /ssh-ro/id_ed25519 /ssh-ro/id_ed25519.pub ~/.ssh/

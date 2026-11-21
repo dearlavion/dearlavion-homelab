@@ -87,7 +87,7 @@ jobs:
   # ----------------------------
   deploy:
     needs: build-toolbox
-    runs-on: [self-hosted, pve]
+    runs-on: [self-hosted, proxmox-deploy]
     permissions:
       contents: read
       packages: read
@@ -100,8 +100,8 @@ jobs:
 
       - name: Pull toolbox image
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          podman pull "$IMAGE:${{ github.sha }}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "$IMAGE:${{ github.sha }}"
 
       - name: Run playbook/site.yml (infra role)
         env:
@@ -109,7 +109,7 @@ jobs:
           ALLOW_DESTROY: ${{ inputs.allow_destroy == true || contains(github.event.head_commit.message, '[allow-destroy]') }}
           PVE_FULL_UPGRADE: ${{ inputs.full_upgrade == true }}
         run: |
-          podman run --rm --network host \
+          docker run --rm --network host \
             -v "$GITHUB_WORKSPACE":/work \
             -v "$STATE_DIR":/state \
             -v "$HOME/.ssh":/ssh-ro:ro \
@@ -120,6 +120,7 @@ jobs:
             -e TF_VAR_net_prefix='${{ vars.NET_PREFIX }}' \
             -e TF_VAR_gateway='${{ vars.GATEWAY }}' \
             -e VM_EXTRA_SSH_KEY='${{ vars.VM_EXTRA_SSH_KEY }}' \
+            -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
             -e ALLOW_DESTROY="$ALLOW_DESTROY" \
             -e PVE_FULL_UPGRADE="$PVE_FULL_UPGRADE" \
             "$IMAGE:${{ github.sha }}" \
@@ -127,4 +128,4 @@ jobs:
 
       - name: Clean up old toolbox images
         if: always()
-        run: podman image prune -af --filter "until=72h" || true
+        run: docker image prune -af --filter "until=72h" || true
