@@ -8,9 +8,11 @@
   ansible.builtin.include_tasks: template.yml
   when: infra_run_host | bool
 
+# Runs for host AND vms targets, so infra-vms works on its own.
+# Idempotent: reuses the token if the saved file exists.
 - name: Terraform API user + token
   ansible.builtin.include_tasks: api_token.yml
-  when: infra_run_host | bool
+  when: infra_run_host | bool or infra_run_vms | bool
 
 - name: VMs (Terraform)
   ansible.builtin.include_tasks: vms.yml

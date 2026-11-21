@@ -13,7 +13,7 @@
 - name: Fail early without an API token
   ansible.builtin.assert:
     that: infra_vms_token_stat.stat.exists
-    fail_msg: "No API token at {{ infra_tf_token_file }}. Run with target=infra or infra-host first."
+    fail_msg: "No API token at {{ infra_tf_token_file }}. The api_token step should have created it."
     quiet: true
 
 - name: terraform init
