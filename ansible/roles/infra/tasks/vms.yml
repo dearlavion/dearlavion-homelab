@@ -26,15 +26,32 @@
   become: false
   changed_when: false
 
+- name: Validate the selected VM
+  ansible.builtin.assert:
+    that: infra_vm == 'all' or infra_vm in infra_vm_all
+    fail_msg: "Unknown VM '{{ infra_vm }}'. Use 'all' or one of {{ infra_vm_all }}."
+    quiet: true
+
+- name: Work out which VMs are selected
+  ansible.builtin.set_fact:
+    infra_vm_selected: "{{ infra_vm_all if infra_vm == 'all' else [infra_vm] }}"
+    infra_vm_addrs: >-
+      {{ (infra_vm_all if infra_vm == 'all' else [infra_vm])
+         | map('regex_replace', '^(.*)$', 'proxmox_virtual_environment_vm.vm["\1"]') | list }}
+
+- name: Show what this run will do
+  ansible.builtin.debug:
+    msg: "VMs: {{ infra_vm_selected | join(', ') }} | rebuild: {{ infra_rebuild | bool }}"
+
 - name: terraform plan
   ansible.builtin.command:
-    argv:
-      - terraform
-      - plan
-      - -input=false
-      - -out=tfplan
-      - "-var-file={{ infra_tf_token_file }}"
-      - "-var=extra_ssh_keys={{ infra_extra_ssh_keys | to_json }}"
+    argv: >-
+      {{ ['terraform', 'plan', '-input=false', '-out=tfplan',
+          '-var-file=' ~ infra_tf_token_file,
+          '-var=extra_ssh_keys=' ~ (infra_extra_ssh_keys | to_json)]
+         + ((infra_vm_addrs | map('regex_replace', '^(.*)$', '-target=\1') | list)
+            + ['-target=local_file.ansible_inventory'] if infra_vm != 'all' else [])
+         + (infra_vm_addrs | map('regex_replace', '^(.*)$', '-replace=\1') | list if infra_rebuild | bool else []) }}
     chdir: "{{ infra_terraform_dir }}"
   delegate_to: localhost
   become: false
@@ -64,7 +81,10 @@
 
 - name: Safety check — block VM deletion unless allowed
   ansible.builtin.assert:
-    that: infra_vm_deletes | length == 0 or infra_allow_destroy | bool
+    # rebuild=true allows deleting only the VMs you selected
+    that: >-
+      (infra_vm_deletes | difference(infra_vm_addrs if infra_rebuild | bool else [])) | length == 0
+      or infra_allow_destroy | bool
     fail_msg: >-
       Plan would DELETE or REPLACE: {{ infra_vm_deletes | join(', ') }}.
       Not applying. Re-run with infra_allow_destroy=true
@@ -73,7 +93,7 @@
 
 - name: terraform apply
   ansible.builtin.command:
-    argv: [terraform, apply, -input=false, tfplan]
+    argv: [terraform, apply, -input=false, -parallelism=1, tfplan]
     chdir: "{{ infra_terraform_dir }}"
   delegate_to: localhost
   become: false

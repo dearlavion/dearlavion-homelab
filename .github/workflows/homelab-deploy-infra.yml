@@ -15,6 +15,22 @@ on:
           - infra        # Proxmox host + VMs
           - infra-host   # host setup, template 9000, API token
           - infra-vms    # VMs 100-103 (Terraform)
+      vm:
+        description: "infra-vms only: which VM to deploy | default(all)"
+        required: false
+        type: choice
+        default: all
+        options:
+          - all
+          - k8s-cp
+          - k8s-w1
+          - k8s-w2
+          - devops
+      rebuild:
+        description: "infra-vms only: DELETE and recreate the selected VM(s) from the template | default(false)"
+        required: false
+        type: boolean
+        default: false
       allow_destroy:
         description: "Allow Terraform to delete/replace VMs | default(false)"
         required: false
@@ -97,6 +113,8 @@ jobs:
           TARGET: ${{ inputs.target || 'infra' }}
           ALLOW_DESTROY: ${{ inputs.allow_destroy == true || contains(github.event.head_commit.message, '[allow-destroy]') }}
           PVE_FULL_UPGRADE: ${{ inputs.full_upgrade == true }}
+          VM_NAME: ${{ inputs.vm || 'all' }}
+          VM_REBUILD: ${{ inputs.rebuild == true }}
         run: |
           docker run --rm --network host \
             -v "$GITHUB_WORKSPACE":/work \
@@ -110,6 +128,7 @@ jobs:
             -e TF_VAR_gateway='${{ vars.GATEWAY }}' \
             -e VM_EXTRA_SSH_KEY='${{ vars.VM_EXTRA_SSH_KEY }}' \
             -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            -e VM_NAME="$VM_NAME" -e VM_REBUILD="$VM_REBUILD" \
             -e ALLOW_DESTROY="$ALLOW_DESTROY" \
             -e PVE_FULL_UPGRADE="$PVE_FULL_UPGRADE" \
             "$IMAGE:${{ github.sha }}" \
