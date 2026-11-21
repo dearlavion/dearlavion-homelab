@@ -23,12 +23,16 @@ EXTRA_VARS=$(jq -nc \
   --arg key "${VM_EXTRA_SSH_KEY:-}" \
   --argjson upgrade "${PVE_FULL_UPGRADE:-false}" \
   --argjson destroy "${ALLOW_DESTROY:-false}" \
+  --arg vm "${VM_NAME:-all}" \
+  --argjson rebuild "${VM_REBUILD:-false}" \
   '{
      target: $target,
      infra_tf_state_path: "/state/terraform.tfstate",
      infra_tf_token_file: "/state/pve-token.auto.tfvars",
      infra_full_upgrade: $upgrade,
      infra_allow_destroy: $destroy,
+     infra_vm: $vm,
+     infra_rebuild: $rebuild,
      infra_extra_ssh_key: $key
    }')
 

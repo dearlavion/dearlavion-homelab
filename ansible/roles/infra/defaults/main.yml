@@ -34,3 +34,9 @@ infra_tf_state_path: ""       # "" = terraform/terraform.tfstate; CI uses /state
 infra_allow_destroy: false    # allow plans that delete/replace VMs
 infra_extra_ssh_key: ""       # extra public key for the VMs (e.g. your Mac)
 infra_extra_ssh_keys: "{{ [infra_extra_ssh_key] if (infra_extra_ssh_key | length > 0) else [] }}"
+
+# ---- Which VM(s) to deploy (infra-vms) ----
+infra_vm: all                 # all | one name from infra_vm_all
+infra_rebuild: false          # true = delete + recreate the selected VM(s)
+# Keep in sync with locals.vms in terraform/main.tf
+infra_vm_all: [k8s-cp, k8s-w1, k8s-w2, devops]
