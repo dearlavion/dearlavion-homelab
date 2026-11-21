@@ -1,20 +1,9 @@
 # homelab-deploy-infra.yml
 # Proxmox host setup + VMs (ansible/roles/infra + terraform/)
+# Manual only: Actions -> homelab-deploy-infra -> Run workflow (pick target).
 name: homelab-deploy-infra
 
 on:
-  push:
-    branches: [dev]
-    # Only infra changes trigger this; other automations in this repo won't.
-    paths:
-      - "ansible/roles/infra/**"
-      - "ansible/playbook/site.yml"
-      - "ansible/inventory/**"
-      - "ansible/ansible.cfg"
-      - "terraform/**"
-      - "toolbox/**"
-      - "ci/**"
-      - ".github/workflows/homelab-deploy-infra.yml"
   workflow_dispatch:
     inputs:
       target:
