@@ -18,9 +18,10 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends terraform \
  && rm -rf /var/lib/apt/lists/*
 
-# Ansible + the collection the playbook uses (ansible.posix.sysctl)
+# Ansible + the collections the playbook uses
+# (ansible.posix.sysctl; community.docker >= 3.8 for docker_container `pull: always`)
 RUN pip install "ansible-core>=2.17,<3" \
- && ansible-galaxy collection install ansible.posix -p "$ANSIBLE_COLLECTIONS_PATH"
+ && ansible-galaxy collection install ansible.posix "community.docker:>=3.8.0" -p "$ANSIBLE_COLLECTIONS_PATH"
 
 WORKDIR /work
 CMD ["bash"]

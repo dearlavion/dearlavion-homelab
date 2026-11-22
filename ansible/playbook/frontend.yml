@@ -1,0 +1,15 @@
+---
+# frontend.yml — UI deployments (the Angular apps). Not implemented yet.
+#
+# Same shape as services.yml: a "locate the VM" play, then a play that applies the app's role.
+# Wire it up with a homelab-frontend workflow that runs ci/run.sh with PLAYBOOK=frontend.
+
+- name: Frontend deployments
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Not implemented yet
+      ansible.builtin.fail:
+        msg: "No frontend deployments exist yet. Add a role and plays to playbook/frontend.yml first."

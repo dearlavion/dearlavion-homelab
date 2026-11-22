@@ -1,11 +1,11 @@
 ---
-# site.yml — homelab orchestrator. Run from ansible/:
+# infra.yml — Proxmox host, template, API token and VMs. Run from ansible/:
 #
-#   ansible-playbook playbook/site.yml -e "target=infra"        # host + VMs
-#   ansible-playbook playbook/site.yml -e "target=infra-host"   # host + template + token
-#   ansible-playbook playbook/site.yml -e "target=infra-vms"    # VMs only (Terraform)
+#   ansible-playbook playbook/infra.yml -e "target=infra"        # host + VMs   (default)
+#   ansible-playbook playbook/infra.yml -e "target=infra-host"   # host + template + token
+#   ansible-playbook playbook/infra.yml -e "target=infra-vms"    # VMs only (Terraform)
 #
-# Add future automations as new roles + run_<name> gates below.
+# Services:  playbook/services.yml   |   UIs:  playbook/frontend.yml
 
 - name: Homelab infrastructure (Proxmox host + VMs)
   hosts: proxmox
@@ -17,13 +17,18 @@
     run_infra_vms: "{{ _target in ['all', 'infra', 'infra-vms'] }}"
 
   tasks:
+    - name: Check the target
+      ansible.builtin.assert:
+        that: _target in ['all', 'infra', 'infra-host', 'infra-vms']
+        fail_msg: "Unknown target '{{ _target }}'. Use infra, infra-host or infra-vms."
+        quiet: true
+
     - name: Infra (Proxmox host + VMs)
       ansible.builtin.include_role:
         name: infra
       vars:
         infra_run_host: "{{ run_infra_host }}"
         infra_run_vms: "{{ run_infra_vms }}"
-      when: run_infra_host or run_infra_vms
 
 - name: Wait for VMs to accept SSH
   hosts: vms

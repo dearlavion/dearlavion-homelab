@@ -1,7 +1,7 @@
 # Run from the repo root. Rename to Makefile:  mv Makefile.example Makefile
 .PHONY: help infra host vms plan ping destroy
 
-PLAY = cd ansible && ansible-playbook playbook/site.yml
+PLAY = cd ansible && ansible-playbook playbook/infra.yml
 
 help:
 	@echo "make infra    - host setup + template + token + VMs   (target=infra)"

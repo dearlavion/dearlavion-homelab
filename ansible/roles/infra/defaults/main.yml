@@ -3,7 +3,7 @@
 # Proxmox host setup + Ubuntu template + Terraform API token + VMs (via Terraform).
 # Override any of these with -e or in inventory/group_vars/proxmox.yml.
 
-# ---- What to run (set by playbook/site.yml from `target`) ----
+# ---- What to run (set by playbook/infra.yml from `target`) ----
 infra_run_host: true          # repos, upgrade, storage, sysctl, template, API token
 infra_run_vms: true           # terraform plan/apply for VMs 100-103
 

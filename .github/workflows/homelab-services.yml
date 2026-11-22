@@ -1,0 +1,75 @@
+# homelab-services.yml
+# Backend services deployed as Docker containers on the VMs (ansible/roles/<service>).
+# Manual only: Actions -> homelab-services -> Run workflow (pick a service).
+# Uses the toolbox image built by homelab-deploy-infra (run its "toolbox" target if missing).
+name: homelab-services
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to deploy"
+        required: true
+        type: choice
+        default: auth-service
+        options:
+          - auth-service    # authentication service v3 -> k8s-w1 (docs/auth-service.md)
+
+permissions:
+  contents: read
+  packages: read
+
+# One homelab deploy at a time across ALL homelab-* workflows
+concurrency:
+  group: homelab-deploy
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/dearlavion/dearlavion-homelab-toolbox
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, proxmox-deploy]
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Pull toolbox image
+        run: |
+          # Same tag rule as homelab-deploy-infra: hash of toolbox/
+          TAG=$(find toolbox -type f | sort | xargs sha256sum | sha256sum | cut -c1-12)
+          echo "TOOLBOX_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "$IMAGE:$TAG" || {
+            echo "::error::Toolbox image $IMAGE:$TAG not found. Run homelab-deploy-infra with target 'toolbox' first."
+            exit 1
+          }
+
+      - name: Run playbook/services.yml (${{ inputs.service }})
+        env:
+          STATE_DIR: /var/lib/homelab-state
+          # Secrets: passed through by NAME below, never written into the script
+          AUTH_MONGODB_URI: ${{ secrets.AUTH_MONGODB_URI }}
+          AUTH_JWT_SECRET: ${{ secrets.AUTH_JWT_SECRET }}
+          AUTH_SERVICE_KEY: ${{ secrets.AUTH_SERVICE_KEY }}
+          AUTH_PROVISION_SECRET: ${{ secrets.AUTH_PROVISION_SECRET }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USER: ${{ vars.GHCR_USER }}
+        run: |
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE":/work \
+            -v "$STATE_DIR":/state \
+            -v "$HOME/.ssh":/ssh-ro:ro \
+            -e PLAYBOOK=services \
+            -e SERVICE='${{ inputs.service }}' \
+            -e TF_VAR_net_prefix='${{ vars.NET_PREFIX }}' \
+            -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            -e AUTH_MONGODB_URI -e AUTH_JWT_SECRET -e AUTH_SERVICE_KEY \
+            -e AUTH_PROVISION_SECRET -e GHCR_TOKEN -e GHCR_USER \
+            "$IMAGE:$TOOLBOX_TAG" \
+            bash /work/ci/run.sh
+
+      - name: Clean up old toolbox images
+        if: always()
+        run: docker image prune -af --filter "until=72h" || true
