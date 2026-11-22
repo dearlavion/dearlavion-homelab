@@ -68,8 +68,10 @@
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ auth_service_port }}{{ auth_service_health_path }}"
     status_code: 200
+    return_content: true
   register: auth_service_health
-  until: auth_service_health.status == 200
+  # The service answers 200 even when Mongo is unreachable, with {"status":"DOWN"}.
+  until: auth_service_health.status == 200 and (auth_service_health.json | default({})).status | default('') == 'UP'
   retries: "{{ auth_service_health_retries }}"
   delay: "{{ auth_service_health_delay }}"
 

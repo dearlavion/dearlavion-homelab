@@ -8,7 +8,7 @@ auth_service_vm_id: 101                    # k8s-w1
 auth_service_vm_user: ubuntu
 
 # ---- What ----
-auth_service_image: ghcr.io/dearlavion/dearlavion-spring-authentication-service-v3:dev
+auth_service_image: ghcr.io/dearlavion/dearlavion-spring-authentication-service:homelab
 auth_service_container_name: auth-service
 auth_service_port: 9081                    # app's own default; the image's EXPOSE 9082 is stale
 auth_service_memory: 1g                    # k8s-w1 has 3.5 GB in total
