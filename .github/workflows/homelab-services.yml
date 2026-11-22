@@ -1,7 +1,8 @@
 # homelab-services.yml
 # Backend services deployed as Docker containers on the VMs (ansible/roles/<service>).
 # Manual only: Actions -> homelab-services -> Run workflow (pick a service).
-# Uses the toolbox image built by homelab-deploy-infra (run its "toolbox" target if missing).
+# Uses the toolbox image (Ansible + Terraform). If that image does not exist yet, this workflow
+# builds it first (same rule as homelab-deploy-infra: tag = hash of toolbox/).
 name: homelab-services
 
 on:
@@ -17,7 +18,7 @@ on:
 
 permissions:
   contents: read
-  packages: read
+  packages: write
 
 # One homelab deploy at a time across ALL homelab-* workflows
 concurrency:
@@ -28,8 +29,66 @@ env:
   IMAGE: ghcr.io/dearlavion/dearlavion-homelab-toolbox
 
 jobs:
+  # ----------------------------
+  # 1. Toolbox image: build + push ONLY if this toolbox/ version is not in GHCR yet
+  # ----------------------------
+  build-toolbox:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag = hash of toolbox/
+        id: tag
+        run: echo "tag=$(find toolbox -type f | sort | xargs sha256sum | sha256sum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Does this toolbox image already exist?
+        id: exists
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:${{ steps.tag.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Toolbox $IMAGE:${{ steps.tag.outputs.tag }} already exists."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Toolbox $IMAGE:${{ steps.tag.outputs.tag }} not found, building it."
+          fi
+
+      - name: Build & Push Image
+        if: steps.exists.outputs.exists != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: toolbox
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE }}:dev
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ----------------------------
+  # 2. vm-runner: pull the toolbox and deploy
+  # ----------------------------
   deploy:
+    needs: build-toolbox
     runs-on: [self-hosted, proxmox-deploy]
+    permissions:
+      contents: read
+      packages: read
+    env:
+      TOOLBOX_TAG: ${{ needs.build-toolbox.outputs.tag }}
 
     steps:
       - name: Checkout repo
@@ -37,14 +96,8 @@ jobs:
 
       - name: Pull toolbox image
         run: |
-          # Same tag rule as homelab-deploy-infra: hash of toolbox/
-          TAG=$(find toolbox -type f | sort | xargs sha256sum | sha256sum | cut -c1-12)
-          echo "TOOLBOX_TAG=$TAG" >> "$GITHUB_ENV"
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker pull "$IMAGE:$TAG" || {
-            echo "::error::Toolbox image $IMAGE:$TAG not found. Run homelab-deploy-infra with target 'toolbox' first."
-            exit 1
-          }
+          docker pull "$IMAGE:$TOOLBOX_TAG"
 
       - name: Run playbook/services.yml (${{ inputs.service }})
         env:

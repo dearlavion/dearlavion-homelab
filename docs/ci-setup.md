@@ -11,8 +11,8 @@ Workflows in `.github/workflows/` (all manual: **Actions → pick one → Run wo
 **Toolbox image** (Ansible + Terraform): owned by `homelab-deploy-infra`, tagged by a hash of
 `toolbox/`. Any infra choice builds it automatically **only if that tag is not in GHCR yet**
 (first run, or after `toolbox/` changed). Target `toolbox` forces a rebuild and deploys nothing.
-`homelab-services` (and later frontend) only **pull** it and fail with a clear message if it is
-missing: run `homelab-deploy-infra` with target `toolbox` first.
+`homelab-services` does the same check and builds the image too if it is missing, so it works even
+if infra was never run. (A later `homelab-frontend` would copy that job.)
 
 All workflows share one `concurrency` group (`homelab-deploy`), so only one runs at a time.
 To add a service: add a role under `ansible/roles/`, a play in `playbook/services.yml`,
