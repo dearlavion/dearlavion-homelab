@@ -12,25 +12,18 @@ on:
         type: choice
         default: infra
         options:
-          - infra        # Proxmox host + VMs
-          - infra-host   # host setup, template 9000, API token
-          - infra-vms    # VMs 100-103 (Terraform)
-      vm:
-        description: "infra-vms only: which VM to deploy | default(all)"
-        required: false
-        type: choice
-        default: all
-        options:
-          - all
-          - k8s-cp
-          - k8s-w1
-          - k8s-w2
-          - devops
-      rebuild:
-        description: "infra-vms only: DELETE and recreate the selected VM(s) from the template | default(false)"
-        required: false
-        type: boolean
-        default: false
+          - infra               # Proxmox host + all VMs
+          - infra-host          # host setup, template 9000, API token
+          - infra-vms           # all VMs (create missing, keep existing)
+          - infra-vms:k8s-cp    # only this VM (create/update)
+          - infra-vms:k8s-w1
+          - infra-vms:k8s-w2
+          - infra-vms:devops
+          - rebuild:k8s-cp      # DELETE + recreate only this VM
+          - rebuild:k8s-w1
+          - rebuild:k8s-w2
+          - rebuild:devops
+          - rebuild:all         # DELETE + recreate ALL VMs
       allow_destroy:
         description: "Allow Terraform to delete/replace VMs | default(false)"
         required: false
@@ -110,12 +103,17 @@ jobs:
 
       - name: Run playbook/site.yml (infra role)
         env:
-          TARGET: ${{ inputs.target || 'infra' }}
+          CHOICE: ${{ inputs.target || 'infra' }}
           ALLOW_DESTROY: ${{ inputs.allow_destroy == true || contains(github.event.head_commit.message, '[allow-destroy]') }}
           PVE_FULL_UPGRADE: ${{ inputs.full_upgrade == true }}
-          VM_NAME: ${{ inputs.vm || 'all' }}
-          VM_REBUILD: ${{ inputs.rebuild == true }}
         run: |
+          # Split the dropdown choice: "rebuild:k8s-w1" -> infra-vms + k8s-w1 + rebuild
+          case "$CHOICE" in
+            rebuild:*)   TARGET=infra-vms; VM_NAME="${CHOICE#*:}"; VM_REBUILD=true ;;
+            infra-vms:*) TARGET=infra-vms; VM_NAME="${CHOICE#*:}"; VM_REBUILD=false ;;
+            *)           TARGET="$CHOICE"; VM_NAME=all; VM_REBUILD=false ;;
+          esac
+          echo "target=$TARGET vm=$VM_NAME rebuild=$VM_REBUILD"
           docker run --rm --network host \
             -v "$GITHUB_WORKSPACE":/work \
             -v "$STATE_DIR":/state \
