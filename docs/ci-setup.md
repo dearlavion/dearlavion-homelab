@@ -1,9 +1,22 @@
 # CI/CD: push to `dev` → Proxmox is updated
 
-Workflow: `.github/workflows/homelab-deploy-infra.yml` (`homelab-deploy-infra`)
+Workflows in `.github/workflows/` (all manual: **Actions → pick one → Run workflow**):
 
-Triggers on push to `dev` **only when infra files change** (`ansible/roles/infra`,
-`ansible/playbook/site.yml`, `ansible/inventory`, `terraform/`, `toolbox/`, `ci/`).
+| File | Deploys | Dropdown |
+|---|---|---|
+| `homelab-deploy-infra.yml` | Proxmox host, template, VMs. **Also builds the toolbox image.** | `target` (toolbox, infra, infra-vms:<vm>, rebuild:<vm>, ...) |
+| `homelab-services.yml` | Backend services (Docker on a VM) | `service` (auth-service) |
+| `homelab-frontend.yml` | UIs, *not created yet* | |
+
+**Toolbox image** (Ansible + Terraform): owned by `homelab-deploy-infra`, tagged by a hash of
+`toolbox/`. Any infra choice builds it automatically **only if that tag is not in GHCR yet**
+(first run, or after `toolbox/` changed). Target `toolbox` forces a rebuild and deploys nothing.
+`homelab-services` (and later frontend) only **pull** it and fail with a clear message if it is
+missing: run `homelab-deploy-infra` with target `toolbox` first.
+
+All workflows share one `concurrency` group (`homelab-deploy`), so only one runs at a time.
+To add a service: add a role under `ansible/roles/`, a play in `playbook/services.yml`,
+an option in `homelab-services.yml`, and any new secrets to that file.
 
 | Machine | IP | Role |
 |---|---|---|
@@ -34,7 +47,7 @@ git push origin dev
    └─ Job 2  deploy          (self-hosted runner on vm-runner, label "pve")
               podman pull ghcr.io/dearlavion/dearlavion-homelab-toolbox:<sha>
               podman run … bash ci/run.sh
-                 ansible-playbook playbook/site.yml -e target=<target>
+                 ansible-playbook playbook/infra.yml -e target=<target>
                    roles/infra: host.yml → template.yml → api_token.yml → vms.yml
                    (vms.yml = terraform plan → safety check → apply)
                  then: wait for SSH on every VM
@@ -162,8 +175,9 @@ gh variable set GATEWAY      -b 192.168.8.1                -R dearlavion/dearlav
 gh variable set VM_EXTRA_SSH_KEY -b "$(cat ~/.ssh/id_ed25519.pub)" -R dearlavion/dearlavion-homelab
 ```
 
-No secrets are needed: the Proxmox API token is created by the `infra` role
-and kept in `/var/lib/homelab-state` on vm-runner.
+Infra needs no secrets: the Proxmox API token is created by the `infra` role
+and kept in `/var/lib/homelab-state` on vm-runner. Deploying services does need
+secrets; see [auth-service.md](auth-service.md).
 
 ---
 

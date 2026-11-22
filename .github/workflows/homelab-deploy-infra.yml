@@ -1,6 +1,10 @@
 # homelab-deploy-infra.yml
 # Proxmox host setup + VMs (ansible/roles/infra + terraform/)
 # Manual only: Actions -> homelab-deploy-infra -> Run workflow (pick target).
+# Also owns the TOOLBOX image (Ansible + Terraform) used by every homelab-* workflow:
+# it is built here, automatically, only when its tag is missing from GHCR (first run, or after
+# toolbox/ changed). Target "toolbox" forces a rebuild and deploys nothing.
+# Services live in homelab-services.yml, UIs in homelab-frontend.yml (later).
 name: homelab-deploy-infra
 
 on:
@@ -12,6 +16,7 @@ on:
         type: choice
         default: infra
         options:
+          - toolbox             # (re)build the toolbox image only, deploys nothing
           - infra               # Proxmox host + all VMs
           - infra-host          # host setup, template 9000, API token
           - infra-vms           # all VMs (create missing, keep existing)
@@ -39,9 +44,10 @@ permissions:
   contents: read
   packages: write
 
-# Never run two homelab deploys at once (shared Terraform state)
+# One homelab deploy at a time across ALL homelab-* workflows
+# (shared Terraform state, and infra can rebuild a VM a service runs on).
 concurrency:
-  group: homelab-deploy-infra
+  group: homelab-deploy
   cancel-in-progress: false
 
 env:
@@ -49,13 +55,20 @@ env:
 
 jobs:
   # ----------------------------
-  # 1. Build toolbox image (Ansible + Terraform) on GitHub, push to GHCR
+  # 1. Toolbox image (Ansible + Terraform), built on GitHub, pushed to GHCR.
+  #    Skipped when an image for the current toolbox/ contents already exists.
   # ----------------------------
   build-toolbox:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Tag = hash of toolbox/
+        id: tag
+        run: echo "tag=$(find toolbox -type f | sort | xargs sha256sum | sha256sum | cut -c1-12)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -67,15 +80,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Does this toolbox image already exist?
+        id: exists
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:${{ steps.tag.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Toolbox $IMAGE:${{ steps.tag.outputs.tag }} already exists."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Toolbox $IMAGE:${{ steps.tag.outputs.tag }} not found, building it."
+          fi
+
       - name: Build & Push Image
+        if: steps.exists.outputs.exists != 'true' || inputs.target == 'toolbox'
         uses: docker/build-push-action@v6
         with:
           context: toolbox
           platforms: linux/amd64
           push: true
           tags: |
+            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ env.IMAGE }}:dev
-            ${{ env.IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -85,12 +110,14 @@ jobs:
   # ----------------------------
   deploy:
     needs: build-toolbox
+    if: inputs.target != 'toolbox'
     runs-on: [self-hosted, proxmox-deploy]
     permissions:
       contents: read
       packages: read
     env:
       STATE_DIR: /var/lib/homelab-state
+      TOOLBOX_TAG: ${{ needs.build-toolbox.outputs.tag }}
 
     steps:
       - name: Checkout repo
@@ -99,12 +126,12 @@ jobs:
       - name: Pull toolbox image
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker pull "$IMAGE:${{ github.sha }}"
+          docker pull "$IMAGE:$TOOLBOX_TAG"
 
-      - name: Run playbook/site.yml (infra role)
+      - name: Run playbook/infra.yml
         env:
-          CHOICE: ${{ inputs.target || 'infra' }}
-          ALLOW_DESTROY: ${{ inputs.allow_destroy == true || contains(github.event.head_commit.message, '[allow-destroy]') }}
+          CHOICE: ${{ inputs.target }}
+          ALLOW_DESTROY: ${{ inputs.allow_destroy == true }}
           PVE_FULL_UPGRADE: ${{ inputs.full_upgrade == true }}
         run: |
           # Split the dropdown choice: "rebuild:k8s-w1" -> infra-vms + k8s-w1 + rebuild
@@ -118,6 +145,7 @@ jobs:
             -v "$GITHUB_WORKSPACE":/work \
             -v "$STATE_DIR":/state \
             -v "$HOME/.ssh":/ssh-ro:ro \
+            -e PLAYBOOK=infra \
             -e TARGET="$TARGET" \
             -e PVE_HOST='${{ vars.PVE_HOST }}' \
             -e TF_VAR_pve_endpoint='${{ vars.PVE_ENDPOINT }}' \
@@ -129,7 +157,7 @@ jobs:
             -e VM_NAME="$VM_NAME" -e VM_REBUILD="$VM_REBUILD" \
             -e ALLOW_DESTROY="$ALLOW_DESTROY" \
             -e PVE_FULL_UPGRADE="$PVE_FULL_UPGRADE" \
-            "$IMAGE:${{ github.sha }}" \
+            "$IMAGE:$TOOLBOX_TAG" \
             bash /work/ci/run.sh
 
       - name: Clean up old toolbox images

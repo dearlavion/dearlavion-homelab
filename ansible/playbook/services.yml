@@ -1,0 +1,53 @@
+---
+# services.yml — backend services run as Docker containers on the VMs. Run from ansible/:
+#
+#   TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/services.yml -e "service=auth-service"
+#
+# The VM is added by IP (net prefix + VM ID), so this works without a Terraform run
+# (which is the only thing that writes inventory/k8s.ini). Secrets come from the environment,
+# see roles/<service>/defaults/main.yml.
+#
+# Add a service: a role under roles/, its name in `_services`, and a play below.
+
+- name: Locate the VM for the service
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    _service: "{{ service | default('') }}"
+    _services: [auth-service]
+    _net_prefix: "{{ lookup('env', 'TF_VAR_net_prefix') }}"
+
+  tasks:
+    - name: Check the service and network prefix
+      ansible.builtin.assert:
+        that:
+          - _service in _services
+          - _net_prefix | length > 0
+        fail_msg: >-
+          Pass -e service=<one of {{ _services }}> and set TF_VAR_net_prefix
+          (e.g. 192.168.8). Got service='{{ _service }}', net prefix='{{ _net_prefix }}'.
+        quiet: true
+
+    - name: Add the auth service VM to the inventory (default k8s-w1, VM 101)
+      ansible.builtin.add_host:
+        name: auth-service-vm
+        groups: auth_service_target
+        ansible_host: "{{ _net_prefix }}.{{ auth_service_vm_id | default(101) }}"
+        ansible_user: "{{ auth_service_vm_user | default('ubuntu') }}"
+      when: _service == 'auth-service'
+
+- name: Deploy the authentication service
+  hosts: auth_service_target
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 60
+
+    - name: Auth service role
+      ansible.builtin.include_role:
+        name: auth_service

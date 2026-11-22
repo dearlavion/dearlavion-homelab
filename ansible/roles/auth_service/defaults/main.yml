@@ -1,0 +1,44 @@
+---
+# Role: auth_service
+# Runs the Dear Lavion authentication service (Spring Boot, GHCR image) as a Docker
+# container on one VM. The VM is picked by ID: IP = <net_prefix>.<vm_id> (same rule as Terraform).
+
+# ---- Where ----
+auth_service_vm_id: 101                    # k8s-w1
+auth_service_vm_user: ubuntu
+
+# ---- What ----
+auth_service_image: ghcr.io/dearlavion/dearlavion-spring-authentication-service:homelab
+auth_service_container_name: auth-service
+auth_service_port: 9081                    # app's own default; the image's EXPOSE 9082 is stale
+auth_service_memory: 1g                    # k8s-w1 has 3.5 GB in total
+# Keeps the image's own JVM flags (Mongo Atlas DNS fix) and caps the heap inside the memory limit.
+auth_service_java_tool_options: >-
+  -Djava.net.preferIPv4Stack=true
+  -Dsun.net.inetaddr.ttl=60
+  -Dsun.net.inetaddr.negative.ttl=10
+  -XX:MaxRAMPercentage=70
+
+# ---- App settings (not secret) ----
+auth_service_customers: "travelbesty,dearcreative"
+auth_service_kafka_enabled: "false"
+auth_service_google_enabled: "false"
+auth_service_session_cookie_path: /api/v1/auth
+auth_service_frontend_origins: ""
+auth_service_extra_env: {}                 # any other env var from the service README
+
+# ---- Secrets: read from the CI container's environment (GitHub Actions secrets) ----
+auth_service_mongodb_uri: "{{ lookup('env', 'AUTH_MONGODB_URI') }}"
+auth_service_jwt_secret: "{{ lookup('env', 'AUTH_JWT_SECRET') }}"
+auth_service_service_key: "{{ lookup('env', 'AUTH_SERVICE_KEY') }}"
+auth_service_provision_secret: "{{ lookup('env', 'AUTH_PROVISION_SECRET') }}"   # optional
+
+# ---- GHCR login so the VM can pull the (private) image; use a read-only token ----
+auth_service_registry: ghcr.io
+auth_service_registry_user: "{{ lookup('env', 'GHCR_USER') }}"
+auth_service_registry_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
+
+# ---- Health check after deploy ----
+auth_service_health_path: /actuator/health
+auth_service_health_retries: 30
+auth_service_health_delay: 5

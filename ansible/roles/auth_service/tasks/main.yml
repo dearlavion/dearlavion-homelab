@@ -1,0 +1,80 @@
+---
+- name: Check the required secrets were passed in
+  ansible.builtin.assert:
+    that:
+      - auth_service_mongodb_uri | length > 0
+      - auth_service_jwt_secret | length > 0
+      - auth_service_registry_user | length > 0
+      - auth_service_registry_token | length > 0
+    fail_msg: >-
+      Missing secret(s). Set GitHub Actions secrets AUTH_MONGODB_URI, AUTH_JWT_SECRET, GHCR_TOKEN
+      and variable GHCR_USER (see docs/auth-service.md).
+    quiet: true
+  no_log: true
+
+# ---- Docker on the VM (the template only has the guest agent) ----
+- name: Install Docker and the Python Docker module
+  ansible.builtin.apt:
+    name: [docker.io, python3-docker]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Docker is enabled and running
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Log in to the registry
+  community.docker.docker_login:
+    registry_url: "{{ auth_service_registry }}"
+    username: "{{ auth_service_registry_user }}"
+    password: "{{ auth_service_registry_token }}"
+  no_log: true
+
+# ---- The service ----
+# pull: always -> a new image under the same tag (:dev) replaces the container.
+# Changed env or image recreates it; nothing changed leaves it running.
+- name: Run the authentication service
+  vars:
+    auth_service_base_env:
+      PORT: "{{ auth_service_port | string }}"
+      CUSTOMERS: "{{ auth_service_customers }}"
+      MONGODB_URI: "{{ auth_service_mongodb_uri }}"
+      JWT_SECRET: "{{ auth_service_jwt_secret }}"
+      SERVICE_KEY: "{{ auth_service_service_key }}"
+      PROVISION_SECRET: "{{ auth_service_provision_secret }}"
+      KAFKA_ENABLED: "{{ auth_service_kafka_enabled }}"
+      GOOGLE_ENABLED: "{{ auth_service_google_enabled }}"
+      SESSION_COOKIE_PATH: "{{ auth_service_session_cookie_path }}"
+      FRONTEND_ORIGINS: "{{ auth_service_frontend_origins }}"
+      JAVA_TOOL_OPTIONS: "{{ auth_service_java_tool_options | trim }}"
+  community.docker.docker_container:
+    name: "{{ auth_service_container_name }}"
+    image: "{{ auth_service_image }}"
+    pull: always
+    state: started
+    restart_policy: unless-stopped
+    memory: "{{ auth_service_memory }}"
+    published_ports:
+      - "{{ auth_service_port }}:{{ auth_service_port }}"
+    env: "{{ auth_service_base_env | combine(auth_service_extra_env) }}"
+  no_log: true
+  register: auth_service_container
+
+# Runs on the VM itself, so it works even though the port is only reachable on the LAN.
+- name: Wait until the service answers its health check
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ auth_service_port }}{{ auth_service_health_path }}"
+    status_code: 200
+    return_content: true
+  register: auth_service_health
+  # The service answers 200 even when Mongo is unreachable, with {"status":"DOWN"}.
+  until: auth_service_health.status == 200 and (auth_service_health.json | default({})).status | default('') == 'UP'
+  retries: "{{ auth_service_health_retries }}"
+  delay: "{{ auth_service_health_delay }}"
+
+- name: Remove dangling images left by earlier deploys
+  community.docker.docker_prune:
+    images: true
