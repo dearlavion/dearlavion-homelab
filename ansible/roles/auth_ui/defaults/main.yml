@@ -1,0 +1,31 @@
+---
+# Role: auth_ui
+# Runs the Dear Lavion security UI (React SPA served by nginx, GHCR image) as a Docker container.
+# Same-origin proxy: the browser only talks to this container; nginx forwards /api/v1/auth and
+# /api/v1/superadmin to the auth service (needed for its SameSite=Strict refresh cookie).
+
+# ---- Where (same VM as the auth service by default) ----
+auth_ui_vm_id: 101                         # k8s-w1
+auth_ui_vm_user: ubuntu
+
+# ---- What ----
+auth_ui_image: ghcr.io/dearlavion/dearlavion-security-ui:homelab
+auth_ui_container_name: auth-ui
+auth_ui_port: 8080                         # published on the VM; container listens on 80
+auth_ui_memory: 128m
+auth_ui_config_dir: /etc/auth-ui           # rendered nginx.conf lives here, mounted read-only
+
+# ---- Where the auth service is ----
+# Default: the auth_service container published on this same VM. Point it elsewhere if it moves.
+auth_ui_auth_port: 9081
+auth_ui_auth_upstream: "http://{{ ansible_host }}:{{ auth_ui_auth_port }}"
+auth_ui_auth_health_path: /actuator/health
+
+# ---- GHCR login so the VM can pull the (private) image; read-only token ----
+auth_ui_registry: ghcr.io
+auth_ui_registry_user: "{{ lookup('env', 'GHCR_USER') }}"
+auth_ui_registry_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
+
+# ---- Check after deploy ----
+auth_ui_health_retries: 20
+auth_ui_health_delay: 3

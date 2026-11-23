@@ -1,16 +1,23 @@
 ---
+# Names only are reported, never values.
+- name: Work out which required settings are empty
+  ansible.builtin.set_fact:
+    auth_service_missing: >-
+      {{ {
+        'AUTH_MONGODB_URI (secret)': auth_service_mongodb_uri,
+        'AUTH_JWT_SECRET (secret)': auth_service_jwt_secret,
+        'GHCR_TOKEN (secret)': auth_service_registry_token,
+        'GHCR_USER (variable)': auth_service_registry_user
+      } | dict2items | selectattr('value', 'equalto', '') | map(attribute='key') | list }}
+  no_log: true
+
 - name: Check the required secrets were passed in
   ansible.builtin.assert:
-    that:
-      - auth_service_mongodb_uri | length > 0
-      - auth_service_jwt_secret | length > 0
-      - auth_service_registry_user | length > 0
-      - auth_service_registry_token | length > 0
+    that: auth_service_missing | length == 0
     fail_msg: >-
-      Missing secret(s). Set GitHub Actions secrets AUTH_MONGODB_URI, AUTH_JWT_SECRET, GHCR_TOKEN
-      and variable GHCR_USER (see docs/auth-service.md).
+      Missing in the homelab repo (Settings > Secrets and variables > Actions):
+      {{ auth_service_missing | join(', ') }}. See docs/auth-service.md.
     quiet: true
-  no_log: true
 
 # ---- Docker on the VM (the template only has the guest agent) ----
 - name: Install Docker and the Python Docker module

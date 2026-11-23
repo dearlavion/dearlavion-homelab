@@ -13,6 +13,7 @@ if [ "$PLAYBOOK" = infra ]; then
 fi
 TARGET="${TARGET:-infra}"       # infra playbook
 SERVICE="${SERVICE:-}"          # services playbook
+APP="${APP:-}"                  # frontend playbook
 
 # Docker runs as real root: hand files back to the runner user on exit,
 # otherwise the next actions/checkout cannot clean the workspace.
@@ -27,6 +28,7 @@ chmod 600 ~/.ssh/id_ed25519
 EXTRA_VARS=$(jq -nc \
   --arg target "$TARGET" \
   --arg service "$SERVICE" \
+  --arg app "$APP" \
   --arg key "${VM_EXTRA_SSH_KEY:-}" \
   --argjson upgrade "${PVE_FULL_UPGRADE:-false}" \
   --argjson destroy "${ALLOW_DESTROY:-false}" \
@@ -35,6 +37,7 @@ EXTRA_VARS=$(jq -nc \
   '{
      target: $target,
      service: $service,
+     app: $app,
      infra_tf_state_path: "/state/terraform.tfstate",
      infra_tf_token_file: "/state/pve-token.auto.tfvars",
      infra_full_upgrade: $upgrade,

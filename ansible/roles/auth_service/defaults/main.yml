@@ -20,7 +20,7 @@ auth_service_java_tool_options: >-
   -XX:MaxRAMPercentage=70
 
 # ---- App settings (not secret) ----
-auth_service_customers: "travelbesty,dearcreative"
+auth_service_customers: "travelbesty,dearcreative,security"   # security = tenant of the superadmin UI
 auth_service_kafka_enabled: "false"
 auth_service_google_enabled: "false"
 auth_service_session_cookie_path: /api/v1/auth

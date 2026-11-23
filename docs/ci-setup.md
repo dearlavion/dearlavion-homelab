@@ -6,17 +6,18 @@ Workflows in `.github/workflows/` (all manual: **Actions → pick one → Run wo
 |---|---|---|
 | `homelab-deploy-infra.yml` | Proxmox host, template, VMs. **Also builds the toolbox image.** | `target` (toolbox, infra, infra-vms:<vm>, rebuild:<vm>, ...) |
 | `homelab-services.yml` | Backend services (Docker on a VM) | `service` (auth-service) |
-| `homelab-frontend.yml` | UIs, *not created yet* | |
+| `homelab-frontend.yml` | UIs (Docker, nginx + SPA) | `app` (auth-ui) |
 
 **Toolbox image** (Ansible + Terraform): owned by `homelab-deploy-infra`, tagged by a hash of
 `toolbox/`. Any infra choice builds it automatically **only if that tag is not in GHCR yet**
 (first run, or after `toolbox/` changed). Target `toolbox` forces a rebuild and deploys nothing.
 `homelab-services` does the same check and builds the image too if it is missing, so it works even
-if infra was never run. (A later `homelab-frontend` would copy that job.)
+if infra was never run. (`homelab-frontend` has the same job.)
 
 All workflows share one `concurrency` group (`homelab-deploy`), so only one runs at a time.
 To add a service: add a role under `ansible/roles/`, a play in `playbook/services.yml`,
-an option in `homelab-services.yml`, and any new secrets to that file.
+an option in `homelab-services.yml`, and any new secrets to that file. UIs: same with
+`playbook/frontend.yml` and `homelab-frontend.yml` (see `docs/auth-ui.md`).
 
 | Machine | IP | Role |
 |---|---|---|

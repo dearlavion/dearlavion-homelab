@@ -1,15 +1,52 @@
 ---
-# frontend.yml — UI deployments (the Angular apps). Not implemented yet.
+# frontend.yml — UIs run as Docker containers (nginx serving the built SPA). Run from ansible/:
 #
-# Same shape as services.yml: a "locate the VM" play, then a play that applies the app's role.
-# Wire it up with a homelab-frontend workflow that runs ci/run.sh with PLAYBOOK=frontend.
+#   TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/frontend.yml -e "app=auth-ui"
+#
+# Same shape as services.yml: the VM is added by IP (net prefix + VM ID), so no Terraform run is
+# needed. Secrets come from the environment, see roles/<app>/defaults/main.yml.
+#
+# Add an app: a role under roles/, its name in `_apps`, and a play below.
 
-- name: Frontend deployments
+- name: Locate the VM for the app
   hosts: localhost
   connection: local
   gather_facts: false
 
+  vars:
+    _app: "{{ app | default('') }}"
+    _apps: [auth-ui]
+    _net_prefix: "{{ lookup('env', 'TF_VAR_net_prefix') }}"
+
   tasks:
-    - name: Not implemented yet
-      ansible.builtin.fail:
-        msg: "No frontend deployments exist yet. Add a role and plays to playbook/frontend.yml first."
+    - name: Check the app and network prefix
+      ansible.builtin.assert:
+        that:
+          - _app in _apps
+          - _net_prefix | length > 0
+        fail_msg: >-
+          Pass -e app=<one of {{ _apps }}> and set TF_VAR_net_prefix
+          (e.g. 192.168.8). Got app='{{ _app }}', net prefix='{{ _net_prefix }}'.
+        quiet: true
+
+    - name: Add the auth UI VM to the inventory (default k8s-w1, VM 101)
+      ansible.builtin.add_host:
+        name: auth-ui-vm
+        groups: auth_ui_target
+        ansible_host: "{{ _net_prefix }}.{{ auth_ui_vm_id | default(101) }}"
+        ansible_user: "{{ auth_ui_vm_user | default('ubuntu') }}"
+      when: _app == 'auth-ui'
+
+- name: Deploy the auth UI
+  hosts: auth_ui_target
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 60
+
+    - name: Auth UI role
+      ansible.builtin.include_role:
+        name: auth_ui

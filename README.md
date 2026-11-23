@@ -10,7 +10,7 @@ ansible/
 ├── playbook/
 │   ├── infra.yml               # Proxmox host + VMs: -e target=...
 │   ├── services.yml            # Docker services on VMs: -e service=...
-│   └── frontend.yml            # UIs (not implemented yet)
+│   └── frontend.yml            # UIs (Docker): -e app=auth-ui
 └── roles/
     └── infra/                  # Proxmox host + VMs
         ├── defaults/main.yml
