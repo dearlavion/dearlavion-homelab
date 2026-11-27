@@ -1,0 +1,35 @@
+---
+# Role: cloudflared
+# Puts UIs on the internet through a Cloudflare Tunnel: outbound-only, no router ports, free HTTPS.
+# Cloudflare terminates TLS; the tunnel connector (a small Docker container) forwards each hostname
+# to its UI on the LAN. Ansible creates the tunnel, its routes and the DNS records through the
+# Cloudflare API, so adding a UI = adding a line to cloudflared_routes.
+
+# ---- Domain ----
+cloudflared_zone: travelbesty.store        # must already be ACTIVE in your Cloudflare account
+
+# hostname -> where the UI answers on the LAN. Add one entry per UI.
+cloudflared_net_prefix: "{{ lookup('env', 'TF_VAR_net_prefix') }}"
+cloudflared_routes:
+  - hostname: security.travelbesty.store
+    service: "http://{{ cloudflared_net_prefix }}.101:8080"      # auth_ui on k8s-w1
+
+# ---- Tunnel ----
+cloudflared_tunnel_name: homelab
+cloudflared_vm_id: 101                     # where the connector container runs
+cloudflared_vm_user: ubuntu
+cloudflared_image: cloudflare/cloudflared:latest
+cloudflared_memory: 128m
+
+# ---- API access (secret from the CI container's environment) ----
+# Token permissions: Account > Cloudflare Tunnel: Edit; Zone > DNS: Edit; Zone > Zone: Read.
+cloudflared_api: https://api.cloudflare.com/client/v4
+cloudflared_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
+
+# ---- Verification ----
+cloudflared_ready_retries: 20
+cloudflared_ready_delay: 5
+cloudflared_public_retries: 12
+cloudflared_public_delay: 10
+# 302/401/403 are fine: they mean something (e.g. Cloudflare Access) answered in front of the UI
+cloudflared_public_ok_status: [200, 301, 302, 401, 403]

@@ -1,0 +1,36 @@
+---
+# Runs on the controller.
+- name: Wait until the tunnel is connected
+  ansible.builtin.uri:
+    url: "{{ cloudflared_api }}/accounts/{{ cloudflared_account_id }}/cfd_tunnel/{{ cloudflared_tunnel_id }}"
+    headers:
+      Authorization: "Bearer {{ cloudflared_api_token }}"
+    return_content: true
+  register: cloudflared_tunnel_state
+  until: cloudflared_tunnel_state.json.result.status | default('') == 'healthy'
+  retries: "{{ cloudflared_ready_retries }}"
+  delay: "{{ cloudflared_ready_delay }}"
+
+- name: Show the tunnel
+  ansible.builtin.debug:
+    msg: "Tunnel {{ cloudflared_tunnel_name }}: {{ cloudflared_tunnel_state.json.result.status }}, {{ cloudflared_tunnel_state.json.result.connections | default([]) | length }} connection(s)"
+
+- name: Check each public URL over HTTPS
+  ansible.builtin.uri:
+    url: "https://{{ item.hostname }}/"
+    status_code: "{{ cloudflared_public_ok_status }}"
+    follow_redirects: none
+  register: cloudflared_public
+  until: cloudflared_public.status in cloudflared_public_ok_status
+  retries: "{{ cloudflared_public_retries }}"
+  delay: "{{ cloudflared_public_delay }}"
+  loop: "{{ cloudflared_routes }}"
+  loop_control:
+    label: "{{ item.hostname }}"
+
+- name: Show the public URLs
+  ansible.builtin.debug:
+    msg: "https://{{ item.item.hostname }}/ -> HTTP {{ item.status }}"
+  loop: "{{ cloudflared_public.results }}"
+  loop_control:
+    label: "{{ item.item.hostname }}"

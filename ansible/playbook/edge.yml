@@ -1,0 +1,71 @@
+---
+# edge.yml — DNS + HTTPS for the UIs through a Cloudflare Tunnel (no router ports, no certificates
+# to manage). Run from ansible/:
+#
+#   CLOUDFLARE_API_TOKEN=... TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/edge.yml -e operation=apply
+#   ... -e operation=status        # look only, change nothing
+#
+# Routes (hostname -> UI): roles/cloudflared/defaults/main.yml. Prerequisites: docs/edge.md.
+
+- name: Cloudflare API (zone, tunnel, routes, DNS)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ playbook_dir }}/../roles/cloudflared/defaults/main.yml"
+
+  tasks:
+    - name: Check the operation, network prefix and API token
+      ansible.builtin.assert:
+        that:
+          - operation | default('') in ['apply', 'status']
+          - cloudflared_net_prefix | length > 0
+          - cloudflared_api_token | length > 0
+        fail_msg: >-
+          Pass -e operation=apply|status, set TF_VAR_net_prefix (e.g. 192.168.8) and CLOUDFLARE_API_TOKEN.
+          Got operation='{{ operation | default('') }}', net prefix='{{ cloudflared_net_prefix }}',
+          token {{ 'set' if cloudflared_api_token | length > 0 else 'EMPTY' }}.
+        quiet: true
+
+    - name: Cloudflare API work
+      ansible.builtin.include_role:
+        name: cloudflared
+        tasks_from: api
+
+    - name: Add the connector VM
+      ansible.builtin.add_host:
+        name: cloudflared-vm
+        groups: cloudflared_target
+        ansible_host: "{{ cloudflared_net_prefix }}.{{ cloudflared_vm_id }}"
+        ansible_user: "{{ cloudflared_vm_user }}"
+      when: operation == 'apply'
+
+- name: Tunnel connector (container)
+  hosts: cloudflared_target
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 60
+
+    - name: Connector role
+      ansible.builtin.include_role:
+        name: cloudflared
+        tasks_from: connector
+
+- name: Check the tunnel and the public URLs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ playbook_dir }}/../roles/cloudflared/defaults/main.yml"
+
+  tasks:
+    - name: Verify
+      ansible.builtin.include_role:
+        name: cloudflared
+        tasks_from: verify

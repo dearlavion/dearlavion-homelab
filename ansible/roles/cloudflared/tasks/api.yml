@@ -1,0 +1,111 @@
+---
+# Runs on the controller (the toolbox container): talks to the Cloudflare API.
+# operation=apply creates/updates everything; operation=status only looks things up.
+- name: Find the Cloudflare zone
+  ansible.builtin.uri:
+    url: "{{ cloudflared_api }}/zones?name={{ cloudflared_zone }}"
+    headers:
+      Authorization: "Bearer {{ cloudflared_api_token }}"
+    return_content: true
+  register: cloudflared_zone_lookup
+  failed_when: >-
+    not (cloudflared_zone_lookup.json.success | default(false))
+    or (cloudflared_zone_lookup.json.result | default([]) | length == 0)
+
+- name: Remember the zone and account IDs
+  ansible.builtin.set_fact:
+    cloudflared_zone_id: "{{ cloudflared_zone_lookup.json.result[0].id }}"
+    cloudflared_account_id: "{{ cloudflared_zone_lookup.json.result[0].account.id }}"
+
+- name: Show the zone status
+  ansible.builtin.debug:
+    msg: "Zone {{ cloudflared_zone }} is {{ cloudflared_zone_lookup.json.result[0].status }}"
+
+- name: The zone must be active (nameservers moved to Cloudflare)
+  ansible.builtin.assert:
+    that: cloudflared_zone_lookup.json.result[0].status == 'active'
+    fail_msg: >-
+      {{ cloudflared_zone }} is '{{ cloudflared_zone_lookup.json.result[0].status }}', not 'active'.
+      Change the nameservers at your registrar to the two Cloudflare gives you and wait for the
+      "Active" email, then run again. See docs/edge.md.
+    quiet: true
+
+- name: Look for the tunnel
+  ansible.builtin.uri:
+    url: "{{ cloudflared_api }}/accounts/{{ cloudflared_account_id }}/cfd_tunnel?name={{ cloudflared_tunnel_name }}&is_deleted=false"
+    headers:
+      Authorization: "Bearer {{ cloudflared_api_token }}"
+    return_content: true
+  register: cloudflared_tunnels
+
+- name: Create the tunnel
+  ansible.builtin.uri:
+    url: "{{ cloudflared_api }}/accounts/{{ cloudflared_account_id }}/cfd_tunnel"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ cloudflared_api_token }}"
+    body_format: json
+    body:
+      name: "{{ cloudflared_tunnel_name }}"
+      config_src: cloudflare
+    return_content: true
+  register: cloudflared_tunnel_created
+  when:
+    - operation == 'apply'
+    - cloudflared_tunnels.json.result | length == 0
+
+- name: Status needs an existing tunnel
+  ansible.builtin.assert:
+    that: cloudflared_tunnels.json.result | length > 0 or operation == 'apply'
+    fail_msg: "Tunnel '{{ cloudflared_tunnel_name }}' does not exist yet. Run operation=apply first."
+    quiet: true
+
+- name: Remember the tunnel ID
+  ansible.builtin.set_fact:
+    cloudflared_tunnel_id: >-
+      {{ cloudflared_tunnels.json.result[0].id if cloudflared_tunnels.json.result | length > 0
+         else cloudflared_tunnel_created.json.result.id }}
+
+# ---- everything below only for apply ----
+- name: Send the routes (hostname -> LAN address) to the tunnel
+  ansible.builtin.uri:
+    url: "{{ cloudflared_api }}/accounts/{{ cloudflared_account_id }}/cfd_tunnel/{{ cloudflared_tunnel_id }}/configurations"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ cloudflared_api_token }}"
+    body_format: json
+    body:
+      config:
+        # The last rule must be a catch-all: any other hostname gets a 404
+        ingress: "{{ cloudflared_routes + [{'service': 'http_status:404'}] }}"
+  when: operation == 'apply'
+
+- name: Point each hostname's DNS at the tunnel (proxied = HTTPS by Cloudflare)
+  community.general.cloudflare_dns:
+    zone: "{{ cloudflared_zone }}"
+    record: "{{ item.hostname }}"
+    type: CNAME
+    value: "{{ cloudflared_tunnel_id }}.cfargotunnel.com"
+    proxied: true
+    api_token: "{{ cloudflared_api_token }}"
+    state: present
+  loop: "{{ cloudflared_routes }}"
+  loop_control:
+    label: "{{ item.hostname }}"
+  when: operation == 'apply'
+
+- name: Get the token the connector uses
+  ansible.builtin.uri:
+    url: "{{ cloudflared_api }}/accounts/{{ cloudflared_account_id }}/cfd_tunnel/{{ cloudflared_tunnel_id }}/token"
+    headers:
+      Authorization: "Bearer {{ cloudflared_api_token }}"
+    return_content: true
+  register: cloudflared_token_raw
+  when: operation == 'apply'
+  no_log: true
+
+- name: Keep the connector token in memory for this run only
+  ansible.builtin.set_fact:
+    cloudflared_tunnel_token: "{{ cloudflared_token_raw.json.result }}"
+  when: operation == 'apply'
+  no_log: true

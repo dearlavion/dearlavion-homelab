@@ -55,6 +55,7 @@
       KAFKA_ENABLED: "{{ auth_service_kafka_enabled }}"
       GOOGLE_ENABLED: "{{ auth_service_google_enabled }}"
       SESSION_COOKIE_PATH: "{{ auth_service_session_cookie_path }}"
+      SESSION_COOKIE_SECURE: "{{ auth_service_session_cookie_secure }}"
       FRONTEND_ORIGINS: "{{ auth_service_frontend_origins }}"
       JAVA_TOOL_OPTIONS: "{{ auth_service_java_tool_options | trim }}"
   community.docker.docker_container:

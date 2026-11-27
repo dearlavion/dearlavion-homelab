@@ -11,7 +11,8 @@ ansible/
 │   ├── infra.yml               # Proxmox host + VMs: -e target=...
 │   ├── services.yml            # Docker services on VMs: -e service=...
 │   ├── frontend.yml            # UIs (Docker): -e app=auth-ui
-│   └── kubernetes.yml          # k3s cluster: -e action=install|status
+│   ├── kubernetes.yml          # k3s cluster: -e operation=install|status (not used yet)
+│   └── edge.yml                # DNS + HTTPS (Cloudflare Tunnel): -e operation=apply|status
 └── roles/
     └── infra/                  # Proxmox host + VMs
         ├── defaults/main.yml

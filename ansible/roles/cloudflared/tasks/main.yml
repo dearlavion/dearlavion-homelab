@@ -1,0 +1,5 @@
+---
+# Not used directly: playbook/edge.yml calls api.yml, connector.yml or verify.yml.
+- name: Choose the part to run
+  ansible.builtin.fail:
+    msg: "Use include_role with tasks_from: api | connector | verify."

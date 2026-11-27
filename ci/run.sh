@@ -5,16 +5,16 @@
 #   /ssh-ro = the runner user's ~/.ssh (read-only)
 set -euo pipefail
 
-# Which playbook: infra (default) | services | frontend | kubernetes. Set by the workflow.
+# Which playbook: infra (default) | services | frontend | kubernetes | edge. Set by the workflow.
 PLAYBOOK="${PLAYBOOK:-infra}"
-case "$PLAYBOOK" in infra|services|frontend|kubernetes) ;; *) echo "Unknown PLAYBOOK '$PLAYBOOK'" >&2; exit 1 ;; esac
+case "$PLAYBOOK" in infra|services|frontend|kubernetes|edge) ;; *) echo "Unknown PLAYBOOK '$PLAYBOOK'" >&2; exit 1 ;; esac
 if [ "$PLAYBOOK" = infra ]; then
   : "${PVE_HOST:?set repo variable PVE_HOST}"   # read by inventory/group_vars/proxmox.yml
 fi
 TARGET="${TARGET:-infra}"       # infra playbook
 SERVICE="${SERVICE:-}"          # services playbook
 APP="${APP:-}"                  # frontend playbook
-ACTION="${ACTION:-}"            # kubernetes playbook
+ACTION="${ACTION:-}"            # kubernetes and edge playbooks
 
 # Docker runs as real root: hand files back to the runner user on exit,
 # otherwise the next actions/checkout cannot clean the workspace.
@@ -30,7 +30,7 @@ EXTRA_VARS=$(jq -nc \
   --arg target "$TARGET" \
   --arg service "$SERVICE" \
   --arg app "$APP" \
-  --arg action "$ACTION" \
+  --arg operation "$ACTION" \
   --arg key "${VM_EXTRA_SSH_KEY:-}" \
   --argjson upgrade "${PVE_FULL_UPGRADE:-false}" \
   --argjson destroy "${ALLOW_DESTROY:-false}" \
@@ -40,7 +40,7 @@ EXTRA_VARS=$(jq -nc \
      target: $target,
      service: $service,
      app: $app,
-     action: $action,
+     operation: $operation,
      infra_tf_state_path: "/state/terraform.tfstate",
      infra_tf_token_file: "/state/pve-token.auto.tfvars",
      infra_full_upgrade: $upgrade,

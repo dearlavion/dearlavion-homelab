@@ -24,7 +24,10 @@ auth_service_customers: "travelbesty,dearcreative,security"   # security = tenan
 auth_service_kafka_enabled: "false"
 auth_service_google_enabled: "false"
 auth_service_session_cookie_path: /api/v1/auth
-auth_service_frontend_origins: ""
+# true = the refresh cookie is only sent over HTTPS (needed on the internet, via the tunnel).
+# A plain-http LAN address (http://192.168.8.101:8080) then cannot keep a login: use the https name.
+auth_service_session_cookie_secure: "true"
+auth_service_frontend_origins: "https://security.travelbesty.store"
 auth_service_extra_env: {}                 # any other env var from the service README
 
 # ---- Secrets: read from the CI container's environment (GitHub Actions secrets) ----

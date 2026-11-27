@@ -1,0 +1,28 @@
+---
+# Runs on the VM, as root: the container that holds the tunnel open (outbound only).
+- name: Install Docker and the Python Docker module
+  ansible.builtin.apt:
+    name: [docker.io, python3-docker]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Docker is enabled and running
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+# pull: always -> picks up new cloudflared releases on each apply.
+- name: Run the tunnel connector
+  community.docker.docker_container:
+    name: cloudflared
+    image: "{{ cloudflared_image }}"
+    pull: always
+    state: started
+    restart_policy: unless-stopped
+    memory: "{{ cloudflared_memory }}"
+    command: tunnel --no-autoupdate run
+    env:
+      TUNNEL_TOKEN: "{{ hostvars['localhost'].cloudflared_tunnel_token }}"
+  no_log: true
