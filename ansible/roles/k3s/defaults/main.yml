@@ -1,0 +1,26 @@
+---
+# Role: k3s
+# Lightweight Kubernetes (single binary, runs on the small VMs). One server (control plane) and
+# any number of agents (workers). VMs are addressed as <net_prefix>.<vm_id>, like Terraform does.
+
+# ---- Which VMs ----
+k3s_server_vm_id: 100                      # k8s-cp
+# Start with k8s-w2 only: k8s-w1 still runs the auth containers in Docker, and Docker's firewall
+# rules can break pod networking. Add 101 here after those containers are gone.
+k3s_agent_vm_ids: [102]                    # k8s-w2
+k3s_vm_user: ubuntu
+
+# ---- Version ----
+# "stable" follows the stable channel at install time. To pin: set k3s_version (e.g. v1.33.4+k3s1,
+# check https://github.com/k3s-io/k3s/releases) and it takes precedence over the channel.
+k3s_channel: stable
+k3s_version: ""
+
+# ---- Install details ----
+k3s_install_script_url: https://get.k3s.io
+k3s_install_script: /usr/local/bin/k3s-install.sh
+k3s_api_port: 6443
+k3s_server_extra_args: ""                  # e.g. "--disable traefik" to drop the built-in ingress
+k3s_node_token_file: /var/lib/rancher/k3s/server/node-token
+k3s_ready_retries: 30
+k3s_ready_delay: 10

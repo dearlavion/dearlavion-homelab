@@ -1,0 +1,97 @@
+---
+# kubernetes.yml — k3s cluster on the VMs. Run from ansible/:
+#
+#   TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/kubernetes.yml -e action=install
+#   TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/kubernetes.yml -e action=status
+#
+# Which VMs: roles/k3s/defaults/main.yml (k3s_server_vm_id, k3s_agent_vm_ids). The VMs are added
+# by IP (net prefix + VM ID), so no Terraform run is needed. Idempotent: install can be re-run to
+# add an agent (add its VM ID to k3s_agent_vm_ids).
+
+- name: Locate the cluster VMs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ playbook_dir }}/../roles/k3s/defaults/main.yml"
+
+  vars:
+    _action: "{{ action | default('') }}"
+    _net_prefix: "{{ lookup('env', 'TF_VAR_net_prefix') }}"
+
+  tasks:
+    - name: Check the action and network prefix
+      ansible.builtin.assert:
+        that:
+          - _action in ['install', 'status']
+          - _net_prefix | length > 0
+        fail_msg: >-
+          Pass -e action=install|status and set TF_VAR_net_prefix (e.g. 192.168.8).
+          Got action='{{ _action }}', net prefix='{{ _net_prefix }}'.
+        quiet: true
+
+    - name: Add the server VM
+      ansible.builtin.add_host:
+        name: k3s-server
+        groups: k3s_server
+        ansible_host: "{{ _net_prefix }}.{{ k3s_server_vm_id }}"
+        ansible_user: "{{ k3s_vm_user }}"
+        k3s_server_ip: "{{ _net_prefix }}.{{ k3s_server_vm_id }}"
+
+    - name: Add the agent VMs
+      ansible.builtin.add_host:
+        name: "k3s-agent-{{ item }}"
+        groups: k3s_agents
+        ansible_host: "{{ _net_prefix }}.{{ item }}"
+        ansible_user: "{{ k3s_vm_user }}"
+        k3s_server_ip: "{{ _net_prefix }}.{{ k3s_server_vm_id }}"
+      loop: "{{ k3s_agent_vm_ids }}"
+
+- name: k3s server (control plane)
+  hosts: k3s_server
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 60
+
+    - name: Install the server
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: server
+      when: action == 'install'
+
+- name: k3s agents (workers)
+  hosts: k3s_agents
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 60
+
+    - name: Install the agent
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: agent
+      vars:
+        k3s_join_token: "{{ hostvars['k3s-server'].k3s_join_token }}"
+      when: action == 'install'
+
+- name: Cluster status
+  hosts: k3s_server
+  gather_facts: false
+  become: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../roles/k3s/defaults/main.yml"
+
+  tasks:
+    - name: Show the cluster
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: status

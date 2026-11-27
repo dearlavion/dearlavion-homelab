@@ -7,6 +7,7 @@ Workflows in `.github/workflows/` (all manual: **Actions → pick one → Run wo
 | `homelab-deploy-infra.yml` | Proxmox host, template, VMs. **Also builds the toolbox image.** | `target` (toolbox, infra, infra-vms:<vm>, rebuild:<vm>, ...) |
 | `homelab-services.yml` | Backend services (Docker on a VM) | `service` (auth-service) |
 | `homelab-frontend.yml` | UIs (Docker, nginx + SPA) | `app` (auth-ui) |
+| `homelab-kubernetes.yml` | k3s cluster (see `docs/kubernetes.md`) | `action` (install, status) |
 
 **Toolbox image** (Ansible + Terraform): owned by `homelab-deploy-infra`, tagged by a hash of
 `toolbox/`. Any infra choice builds it automatically **only if that tag is not in GHCR yet**

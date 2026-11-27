@@ -1,0 +1,22 @@
+---
+# Runs on the server VM: every node should be Ready.
+- name: List the nodes
+  ansible.builtin.command: k3s kubectl get nodes -o wide
+  register: k3s_nodes
+  until: k3s_nodes.rc == 0 and (k3s_nodes.stdout_lines | length - 1) == (1 + k3s_agent_vm_ids | length) and 'NotReady' not in k3s_nodes.stdout
+  retries: "{{ k3s_ready_retries }}"
+  delay: "{{ k3s_ready_delay }}"
+  changed_when: false
+
+- name: Show the nodes
+  ansible.builtin.debug:
+    var: k3s_nodes.stdout_lines
+
+- name: List the system pods
+  ansible.builtin.command: k3s kubectl get pods -A
+  register: k3s_pods
+  changed_when: false
+
+- name: Show the system pods
+  ansible.builtin.debug:
+    var: k3s_pods.stdout_lines

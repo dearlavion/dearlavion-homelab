@@ -1,0 +1,24 @@
+---
+# Worker. Runs on each agent VM, as root. Needs k3s_join_token from the server play.
+- name: Download the k3s install script
+  ansible.builtin.get_url:
+    url: "{{ k3s_install_script_url }}"
+    dest: "{{ k3s_install_script }}"
+    mode: "0755"
+
+- name: Install k3s (agent) and join the cluster
+  ansible.builtin.command:
+    cmd: "{{ k3s_install_script }} agent --node-ip {{ ansible_host }}"
+    creates: /etc/systemd/system/k3s-agent.service
+  environment:
+    INSTALL_K3S_CHANNEL: "{{ k3s_channel }}"
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    K3S_URL: "https://{{ k3s_server_ip }}:{{ k3s_api_port }}"
+    K3S_TOKEN: "{{ k3s_join_token }}"
+  no_log: true
+
+- name: k3s-agent service is enabled and running
+  ansible.builtin.service:
+    name: k3s-agent
+    state: started
+    enabled: true

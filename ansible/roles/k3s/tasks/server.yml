@@ -1,0 +1,45 @@
+---
+# Control plane. Runs on the server VM, as root.
+- name: Download the k3s install script
+  ansible.builtin.get_url:
+    url: "{{ k3s_install_script_url }}"
+    dest: "{{ k3s_install_script }}"
+    mode: "0755"
+
+- name: Install k3s (server)
+  ansible.builtin.command:
+    cmd: >-
+      {{ k3s_install_script }} server
+      --node-ip {{ ansible_host }}
+      --tls-san {{ ansible_host }}
+      {{ k3s_server_extra_args }}
+    creates: /usr/local/bin/k3s
+  environment:
+    INSTALL_K3S_CHANNEL: "{{ k3s_channel }}"
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+
+- name: k3s service is enabled and running
+  ansible.builtin.service:
+    name: k3s
+    state: started
+    enabled: true
+
+- name: Wait until this node is Ready
+  ansible.builtin.command: k3s kubectl get nodes --no-headers
+  register: k3s_server_nodes
+  until: k3s_server_nodes.rc == 0 and ' Ready ' in k3s_server_nodes.stdout
+  retries: "{{ k3s_ready_retries }}"
+  delay: "{{ k3s_ready_delay }}"
+  changed_when: false
+
+# Agents need this to join. Kept in memory for this run only, never printed.
+- name: Read the join token
+  ansible.builtin.slurp:
+    src: "{{ k3s_node_token_file }}"
+  register: k3s_token_raw
+  no_log: true
+
+- name: Remember the join token for the agents
+  ansible.builtin.set_fact:
+    k3s_join_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+  no_log: true
