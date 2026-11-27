@@ -1,9 +1,9 @@
-# homelab-edge.yml
+# homelab-cloudflare-tunnel.yml
 # DNS + HTTPS for the UIs via a Cloudflare Tunnel (ansible/roles/cloudflared, playbook/edge.yml).
-# Manual only: Actions -> homelab-edge -> Run workflow (pick an action). Setup: docs/edge.md.
+# Manual only: Actions -> homelab-cloudflare-tunnel -> Run workflow (pick an action). Setup: docs/edge.md.
 # Uses the toolbox image (Ansible + Terraform). If that image does not exist yet, this workflow
 # builds it first (same rule as homelab-deploy-infra: tag = hash of toolbox/).
-name: homelab-edge
+name: homelab-cloudflare-tunnel
 
 on:
   workflow_dispatch:

@@ -1,6 +1,6 @@
 # security.travelbesty.store on the internet (Cloudflare Tunnel)
 
-Workflow: **Actions → homelab-edge → Run workflow → `apply` / `status`**
+Workflow: **Actions → homelab-cloudflare-tunnel → Run workflow → `apply` / `status`**
 Playbook: `ansible/playbook/edge.yml`, role: `ansible/roles/cloudflared/`
 
 ```
@@ -38,7 +38,7 @@ Domain → **SSL/TLS → Edge Certificates** → turn on **Always Use HTTPS**.
 
 ### 5. Create the API token the pipeline uses
 1. Top-right profile → **My Profile → API Tokens → Create Token → Create Custom Token**.
-2. Name: `homelab-edge`.
+2. Name: `homelab-cloudflare-tunnel`.
 3. Permissions (three rows):
    - **Account** · **Cloudflare Tunnel** · **Edit**
    - **Zone** · **DNS** · **Edit**
@@ -64,13 +64,13 @@ Commit and push the homelab changes to `dev` first. Then run, one after the othe
 1. **homelab-services → `auth-service`**: switches the session cookie to HTTPS-only (`SESSION_COOKIE_SECURE=true`),
    adds the UI's `https://` origin, and keeps the `security` tenant.
 2. **homelab-frontend → `auth-ui`**: installs the hardened nginx config (see below).
-3. **homelab-edge → `apply`**: creates the tunnel `homelab`, its route
+3. **homelab-cloudflare-tunnel → `apply`**: creates the tunnel `homelab`, its route
    `security.travelbesty.store → http://192.168.8.101:8080`, the DNS record (CNAME, proxied), starts the
    `cloudflared` container on k8s-w1, then checks the tunnel is healthy and the public URL answers.
 
 First run of any workflow also builds the toolbox image (a new collection was added), which takes a few minutes.
 
-Open **https://security.travelbesty.store**. Run **homelab-edge → `status`** any time to re-check.
+Open **https://security.travelbesty.store**. Run **homelab-cloudflare-tunnel → `status`** any time to re-check.
 
 ---
 
@@ -102,7 +102,7 @@ Add a line to `cloudflared_routes` in `roles/cloudflared/defaults/main.yml`:
   - hostname: other.travelbesty.store
     service: "http://{{ cloudflared_net_prefix }}.101:8081"
 ```
-Run **homelab-edge → apply**. The DNS record and route are created for you.
+Run **homelab-cloudflare-tunnel → apply**. The DNS record and route are created for you.
 
 ---
 
