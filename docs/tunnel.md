@@ -1,7 +1,7 @@
 # security.travelbesty.store on the internet (Cloudflare Tunnel)
 
 Workflow: **Actions → homelab-cloudflare-tunnel → Run workflow → `apply` / `status`**
-Playbook: `ansible/playbook/edge.yml`, role: `ansible/roles/cloudflared/`
+Playbook: `ansible/playbook/tunnel.yml`, role: `ansible/roles/cloudflared/`
 
 ```
 Browser ──HTTPS──► Cloudflare (DNS + certificate + optional login)

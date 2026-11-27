@@ -1,11 +1,11 @@
 ---
-# edge.yml — DNS + HTTPS for the UIs through a Cloudflare Tunnel (no router ports, no certificates
+# tunnel.yml — DNS + HTTPS for the UIs through a Cloudflare Tunnel (no router ports, no certificates
 # to manage). Run from ansible/:
 #
-#   CLOUDFLARE_API_TOKEN=... TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/edge.yml -e operation=apply
+#   CLOUDFLARE_API_TOKEN=... TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/tunnel.yml -e operation=apply
 #   ... -e operation=status        # look only, change nothing
 #
-# Routes (hostname -> UI): roles/cloudflared/defaults/main.yml. Prerequisites: docs/edge.md.
+# Routes (hostname -> UI): roles/cloudflared/defaults/main.yml. Prerequisites: docs/tunnel.md.
 
 - name: Cloudflare API (zone, tunnel, routes, DNS)
   hosts: localhost

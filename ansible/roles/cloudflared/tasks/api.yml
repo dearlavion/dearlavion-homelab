@@ -27,7 +27,7 @@
     fail_msg: >-
       {{ cloudflared_zone }} is '{{ cloudflared_zone_lookup.json.result[0].status }}', not 'active'.
       Change the nameservers at your registrar to the two Cloudflare gives you and wait for the
-      "Active" email, then run again. See docs/edge.md.
+      "Active" email, then run again. See docs/tunnel.md.
     quiet: true
 
 - name: Look for the tunnel
@@ -54,11 +54,14 @@
     - operation == 'apply'
     - cloudflared_tunnels.json.result | length == 0
 
-- name: Status needs an existing tunnel
-  ansible.builtin.assert:
-    that: cloudflared_tunnels.json.result | length > 0 or operation == 'apply'
-    fail_msg: "Tunnel '{{ cloudflared_tunnel_name }}' does not exist yet. Run operation=apply first."
-    quiet: true
+- name: Stop with a clear message if there is no tunnel to check yet
+  ansible.builtin.fail:
+    msg: >-
+      Tunnel '{{ cloudflared_tunnel_name }}' does not exist yet. Apply first:
+      run the homelab-cloudflare-tunnel workflow with action "apply" (status only looks, it never creates).
+  when:
+    - operation != 'apply'
+    - cloudflared_tunnels.json.result | length == 0
 
 - name: Remember the tunnel ID
   ansible.builtin.set_fact:

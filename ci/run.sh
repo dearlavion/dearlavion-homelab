@@ -5,16 +5,16 @@
 #   /ssh-ro = the runner user's ~/.ssh (read-only)
 set -euo pipefail
 
-# Which playbook: infra (default) | services | frontend | kubernetes | edge. Set by the workflow.
+# Which playbook: infra (default) | services | frontend | kubernetes | tunnel. Set by the workflow.
 PLAYBOOK="${PLAYBOOK:-infra}"
-case "$PLAYBOOK" in infra|services|frontend|kubernetes|edge) ;; *) echo "Unknown PLAYBOOK '$PLAYBOOK'" >&2; exit 1 ;; esac
+case "$PLAYBOOK" in infra|services|frontend|kubernetes|tunnel) ;; *) echo "Unknown PLAYBOOK '$PLAYBOOK'" >&2; exit 1 ;; esac
 if [ "$PLAYBOOK" = infra ]; then
   : "${PVE_HOST:?set repo variable PVE_HOST}"   # read by inventory/group_vars/proxmox.yml
 fi
 TARGET="${TARGET:-infra}"       # infra playbook
 SERVICE="${SERVICE:-}"          # services playbook
 APP="${APP:-}"                  # frontend playbook
-ACTION="${ACTION:-}"            # kubernetes and edge playbooks
+ACTION="${ACTION:-}"            # kubernetes and tunnel playbooks
 
 # Docker runs as real root: hand files back to the runner user on exit,
 # otherwise the next actions/checkout cannot clean the workspace.

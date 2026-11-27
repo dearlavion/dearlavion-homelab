@@ -1,6 +1,6 @@
 # homelab-cloudflare-tunnel.yml
-# DNS + HTTPS for the UIs via a Cloudflare Tunnel (ansible/roles/cloudflared, playbook/edge.yml).
-# Manual only: Actions -> homelab-cloudflare-tunnel -> Run workflow (pick an action). Setup: docs/edge.md.
+# DNS + HTTPS for the UIs via a Cloudflare Tunnel (ansible/roles/cloudflared, playbook/tunnel.yml).
+# Manual only: Actions -> homelab-cloudflare-tunnel -> Run workflow (pick an action). Setup: docs/tunnel.md.
 # Uses the toolbox image (Ansible + Terraform). If that image does not exist yet, this workflow
 # builds it first (same rule as homelab-deploy-infra: tag = hash of toolbox/).
 name: homelab-cloudflare-tunnel
@@ -100,7 +100,7 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker pull "$IMAGE:$TOOLBOX_TAG"
 
-      - name: Run playbook/edge.yml (${{ inputs.action }})
+      - name: Run playbook/tunnel.yml (${{ inputs.action }})
         env:
           STATE_DIR: /var/lib/homelab-state
           # Passed through by NAME below, never written into the script
@@ -110,7 +110,7 @@ jobs:
             -v "$GITHUB_WORKSPACE":/work \
             -v "$STATE_DIR":/state \
             -v "$HOME/.ssh":/ssh-ro:ro \
-            -e PLAYBOOK=edge \
+            -e PLAYBOOK=tunnel \
             -e ACTION='${{ inputs.action }}' \
             -e TF_VAR_net_prefix='${{ vars.NET_PREFIX }}' \
             -e CLOUDFLARE_API_TOKEN \
