@@ -11,9 +11,13 @@ ansible/
 │   ├── infra.yml               # Proxmox host + VMs: -e target=...
 │   ├── services.yml            # Docker services on VMs: -e service=...
 │   ├── frontend.yml            # UIs (Docker): -e app=security-ui
-│   ├── kubernetes.yml          # k3s cluster: -e operation=install|status (not used yet)
+│   ├── kubernetes.yml          # k3s cluster: -e operation=install|status
 │   └── tunnel.yml                # DNS + HTTPS (Cloudflare Tunnel): -e operation=apply|status
 └── roles/
+    ├── auth_service/           # auth service (Docker)
+    ├── security_ui/            # security UI (Docker)
+    ├── cloudflared/            # Cloudflare Tunnel
+    ├── k3s/                    # Kubernetes cluster (docs/kubernetes.md)
     └── infra/                  # Proxmox host + VMs
         ├── defaults/main.yml
         ├── files/vendor.yaml   # cloud-init snippet
@@ -55,9 +59,11 @@ delete its own runner. `local` keeps OS, snippets, backups and vm-runner's disk
 
 ## CI/CD
 
-Push to the `dev` branch → GitHub builds a toolbox image (Ansible +
-Terraform) → a self-hosted runner on **vm-runner (VM 104)** pulls it and runs
-`ci/run.sh` → `playbook/infra.yml` (infra role). Workflow: `homelab-deploy-infra`.
+Workflows are started by hand (**Actions → pick one → Run workflow**); pushing
+does not run them. GitHub builds the toolbox image (Ansible + Terraform) if it
+is missing → the self-hosted runner on **vm-runner (VM 104)**, label
+`proxmox-deploy`, pulls it with Docker and runs `ci/run.sh` → the workflow's
+playbook (for example `homelab-deploy-infra` runs `playbook/infra.yml`).
 
 One-time runner setup and repo variables: **[docs/ci-setup.md](docs/ci-setup.md)**
 

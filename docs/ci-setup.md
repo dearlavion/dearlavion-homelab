@@ -1,4 +1,4 @@
-# CI/CD: push to `dev` → Proxmox is updated
+# CI/CD: run a workflow → the homelab is updated
 
 Workflows in `.github/workflows/` (all manual: **Actions → pick one → Run workflow**):
 
@@ -39,21 +39,23 @@ picks up jobs. No port forwarding, nothing exposed to the internet.
 
 - **Not VM 103 (devops):** Terraform manages 100-103. A run that replaces 103
   would delete the runner in the middle of its own job.
-- **Not the Proxmox host:** keeps podman and the runner off the hypervisor.
+- **Not the Proxmox host:** keeps Docker and the runner off the hypervisor.
 
 ```
-git push origin dev
+Actions → pick a workflow → Run workflow
    │
    ├─ Job 1  build-toolbox   (GitHub-hosted, ubuntu-latest)
-   │          toolbox/Dockerfile → ghcr.io/dearlavion/dearlavion-homelab-toolbox:<sha>
+   │          toolbox/Dockerfile → ghcr.io/dearlavion/dearlavion-homelab-toolbox:<hash of toolbox/>
+   │          (built only if that tag is missing)
    │
-   └─ Job 2  deploy          (self-hosted runner on vm-runner, label "pve")
-              podman pull ghcr.io/dearlavion/dearlavion-homelab-toolbox:<sha>
-              podman run … bash ci/run.sh
-                 ansible-playbook playbook/infra.yml -e target=<target>
-                   roles/infra: host.yml → template.yml → api_token.yml → vms.yml
-                   (vms.yml = terraform plan → safety check → apply)
-                 then: wait for SSH on every VM
+   └─ Job 2  deploy          (self-hosted runner on vm-runner, label "proxmox-deploy")
+              docker pull ghcr.io/dearlavion/dearlavion-homelab-toolbox:<hash>
+              docker run … bash ci/run.sh
+                 ansible-playbook playbook/<name>.yml
+
+For homelab-deploy-infra, <name> is infra:
+   roles/infra: host.yml → template.yml → api_token.yml → vms.yml
+   (host/template run for infra and infra-host; vms.yml = terraform plan → safety check → apply)
 ```
 
 Persistent data on vm-runner: `/var/lib/homelab-state/`
@@ -78,19 +80,21 @@ echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf
 sudo sysctl --system >/dev/null
 ```
 
-### 2. Podman + a dedicated runner user
+### 2. Docker + a dedicated runner user
+
+The workflows run `docker` commands on this VM.
 
 ```bash
-sudo apt update && sudo apt install -y podman uidmap
+sudo apt update && sudo apt install -y docker.io
 sudo useradd -m -s /bin/bash github-runner
 
-# rootless podman needs sub-UID ranges (usually added automatically)
-grep -q github-runner /etc/subuid || \
-  sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 github-runner
-
-# keep the user's runtime dir alive without a login session
-sudo loginctl enable-linger github-runner
+# lets the runner use Docker without sudo
+sudo usermod -aG docker github-runner
 ```
+
+Membership in the `docker` group is root-equivalent on this VM, so only run
+trusted workflows on this runner. If the runner service is already installed,
+restart it after changing groups.
 
 ### 3. State folder + SSH key
 
@@ -131,8 +135,7 @@ mkdir actions-runner && cd actions-runner
 # paste the "curl -o actions-runner-linux-x64-…tar.gz" and "tar xzf" lines here
 
 ./config.sh --url https://github.com/dearlavion/dearlavion-homelab \
-  --token <TOKEN_FROM_PAGE> --name vm-runner --labels pve --unattended
-echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> .env
+  --token <TOKEN_FROM_PAGE> --name vm-runner --labels proxmox-deploy --unattended
 exit
 ```
 
@@ -145,12 +148,14 @@ sudo ./svc.sh start
 sudo ./svc.sh status
 ```
 
-The runner should now show **Idle** on the Runners page.
+The runner should now show **Idle** on the Runners page, with the label
+`proxmox-deploy`. Jobs stay queued without it. For an existing runner, add the
+label on that page (click the runner); no need to register it again.
 
-Quick test that rootless podman works for the runner:
+Quick test that Docker works for the runner:
 
 ```bash
-sudo -iu github-runner podman run --rm docker.io/library/alpine echo ok
+sudo -iu github-runner docker run --rm alpine echo ok
 ```
 
 ---
@@ -186,12 +191,11 @@ secrets; see [auth-service.md](auth-service.md).
 
 ## Using it
 
-```bash
-git checkout -b dev        # first time
-git push -u origin dev     # every push to dev (touching infra files) runs the pipeline
-```
+All workflows are started by hand; pushing does not run them.
 
-Manual run with options: **Actions → homelab-deploy-infra → Run workflow**
+**Actions → homelab-deploy-infra → Run workflow**, pick the branch (usually
+`dev`) and the options. GitHub only offers **Run workflow** once the workflow
+file is also on the default branch (`main`), so merge new workflows there first.
 
 | Option | Default | Effect |
 |---|---|---|
@@ -203,8 +207,7 @@ Manual run with options: **Actions → homelab-deploy-infra → Run workflow**
 
 If a change would **delete or replace** a VM (e.g. you shrank a disk or
 changed something that forces re-creation), the job stops before applying.
-To allow it: run manually with `allow_destroy`, or include
-`[allow-destroy]` in the commit message.
+To allow it: run the workflow with `allow_destroy` turned on.
 
 ### Already ran Terraform from your Mac?
 
@@ -218,10 +221,9 @@ ssh ubuntu@192.168.8.104 'sudo mv /tmp/terraform.tfstate /var/lib/homelab-state/
 
 ### Security notes
 
-- The workflow runs only on **push to `dev`** and **manual runs**, never on
-  pull requests, so forks cannot run code on your server. Don't add a
-  `pull_request` trigger to the `deploy` job.
+- The workflows run only when started by hand, never on pushes or pull
+  requests. Don't add a `pull_request` trigger to a `deploy` job.
 - The runner's SSH key can log in to Proxmox as root. Protect the `dev`
-  branch (Settings → Branches) so only you can push to it.
+  and `main` branches (Settings → Branches) so only you can push to them.
 - Turn on **Protection** for VM 104 in Proxmox (Options → Protection) so it
   can't be deleted by accident.
