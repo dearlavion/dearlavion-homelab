@@ -12,7 +12,7 @@ cloudflared_zone: travelbesty.store        # must already be ACTIVE in your Clou
 cloudflared_net_prefix: "{{ lookup('env', 'TF_VAR_net_prefix') }}"
 cloudflared_routes:
   - hostname: security.travelbesty.store
-    service: "http://{{ cloudflared_net_prefix }}.101:8080"      # auth_ui on k8s-w1
+    service: "http://{{ cloudflared_net_prefix }}.101:8080"      # security_ui on k8s-w1
 
 # ---- Tunnel ----
 cloudflared_tunnel_name: homelab

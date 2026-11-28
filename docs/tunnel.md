@@ -7,7 +7,7 @@ Playbook: `ansible/playbook/tunnel.yml`, role: `ansible/roles/cloudflared/`
 Browser ──HTTPS──► Cloudflare (DNS + certificate + optional login)
                        │  tunnel: opened OUTWARD by the connector, so no router ports
                        ▼
-        k8s-w1 (192.168.8.101): cloudflared container ─► auth-ui :8080 (nginx) ─► auth-service :9081
+        k8s-w1 (192.168.8.101): cloudflared container ─► security-ui :8080 (nginx) ─► auth-service :9081
 ```
 
 Nothing is opened on your router. HTTPS is Cloudflare's certificate (automatic and free).
@@ -63,7 +63,7 @@ Commit and push the homelab changes to `dev` first. Then run, one after the othe
 
 1. **homelab-services → `auth-service`**: switches the session cookie to HTTPS-only (`SESSION_COOKIE_SECURE=true`),
    adds the UI's `https://` origin, and keeps the `security` tenant.
-2. **homelab-frontend → `auth-ui`**: installs the hardened nginx config (see below).
+2. **homelab-frontend → `security-ui`**: installs the hardened nginx config (see below).
 3. **homelab-cloudflare-tunnel → `apply`**: creates the tunnel `homelab`, its route
    `security.travelbesty.store → http://192.168.8.101:8080`, the DNS record (CNAME, proxied), starts the
    `cloudflared` container on k8s-w1, then checks the tunnel is healthy and the public URL answers.
@@ -124,5 +124,5 @@ Commands on k8s-w1 (`ssh ubuntu@192.168.8.101`):
 ```bash
 sudo docker ps
 sudo docker logs --tail 30 cloudflared
-sudo docker logs --tail 30 auth-ui
+sudo docker logs --tail 30 security-ui
 ```

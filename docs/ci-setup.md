@@ -6,7 +6,7 @@ Workflows in `.github/workflows/` (all manual: **Actions → pick one → Run wo
 |---|---|---|
 | `homelab-deploy-infra.yml` | Proxmox host, template, VMs. **Also builds the toolbox image.** | `target` (toolbox, infra, infra-vms:<vm>, rebuild:<vm>, ...) |
 | `homelab-services.yml` | Backend services (Docker on a VM) | `service` (auth-service) |
-| `homelab-frontend.yml` | UIs (Docker, nginx + SPA) | `app` (auth-ui) |
+| `homelab-frontend.yml` | UIs (Docker, nginx + SPA) | `app` (security-ui) |
 | `homelab-cloudflare-tunnel.yml` | DNS + HTTPS for the UIs (Cloudflare Tunnel, see `docs/tunnel.md`) | `action` (apply, status) |
 | `homelab-kubernetes.yml` | k3s cluster (see `docs/kubernetes.md`) | `action` (install, status) |
 
@@ -19,7 +19,7 @@ if infra was never run. (`homelab-frontend` has the same job.)
 All workflows share one `concurrency` group (`homelab-deploy`), so only one runs at a time.
 To add a service: add a role under `ansible/roles/`, a play in `playbook/services.yml`,
 an option in `homelab-services.yml`, and any new secrets to that file. UIs: same with
-`playbook/frontend.yml` and `homelab-frontend.yml` (see `docs/auth-ui.md`).
+`playbook/frontend.yml` and `homelab-frontend.yml` (see `docs/security-ui.md`).
 
 | Machine | IP | Role |
 |---|---|---|

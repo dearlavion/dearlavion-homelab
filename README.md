@@ -10,7 +10,7 @@ ansible/
 ├── playbook/
 │   ├── infra.yml               # Proxmox host + VMs: -e target=...
 │   ├── services.yml            # Docker services on VMs: -e service=...
-│   ├── frontend.yml            # UIs (Docker): -e app=auth-ui
+│   ├── frontend.yml            # UIs (Docker): -e app=security-ui
 │   ├── kubernetes.yml          # k3s cluster: -e operation=install|status (not used yet)
 │   └── tunnel.yml                # DNS + HTTPS (Cloudflare Tunnel): -e operation=apply|status
 └── roles/

@@ -1,7 +1,7 @@
 ---
 # frontend.yml — UIs run as Docker containers (nginx serving the built SPA). Run from ansible/:
 #
-#   TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/frontend.yml -e "app=auth-ui"
+#   TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/frontend.yml -e "app=security-ui"
 #
 # Same shape as services.yml: the VM is added by IP (net prefix + VM ID), so no Terraform run is
 # needed. Secrets come from the environment, see roles/<app>/defaults/main.yml.
@@ -15,7 +15,7 @@
 
   vars:
     _app: "{{ app | default('') }}"
-    _apps: [auth-ui]
+    _apps: [security-ui]
     _net_prefix: "{{ lookup('env', 'TF_VAR_net_prefix') }}"
 
   tasks:
@@ -29,16 +29,16 @@
           (e.g. 192.168.8). Got app='{{ _app }}', net prefix='{{ _net_prefix }}'.
         quiet: true
 
-    - name: Add the auth UI VM to the inventory (default k8s-w1, VM 101)
+    - name: Add the security UI VM to the inventory (default k8s-w1, VM 101)
       ansible.builtin.add_host:
-        name: auth-ui-vm
-        groups: auth_ui_target
-        ansible_host: "{{ _net_prefix }}.{{ auth_ui_vm_id | default(101) }}"
-        ansible_user: "{{ auth_ui_vm_user | default('ubuntu') }}"
-      when: _app == 'auth-ui'
+        name: security-ui-vm
+        groups: security_ui_target
+        ansible_host: "{{ _net_prefix }}.{{ security_ui_vm_id | default(101) }}"
+        ansible_user: "{{ security_ui_vm_user | default('ubuntu') }}"
+      when: _app == 'security-ui'
 
-- name: Deploy the auth UI
-  hosts: auth_ui_target
+- name: Deploy the security UI
+  hosts: security_ui_target
   gather_facts: false
   become: true
 
@@ -47,6 +47,6 @@
       ansible.builtin.wait_for_connection:
         timeout: 60
 
-    - name: Auth UI role
+    - name: Security UI role
       ansible.builtin.include_role:
-        name: auth_ui
+        name: security_ui

@@ -2,19 +2,19 @@
 # Names only are reported, never values.
 - name: Work out which required settings are empty
   ansible.builtin.set_fact:
-    auth_ui_missing: >-
+    security_ui_missing: >-
       {{ {
-        'GHCR_TOKEN (secret)': auth_ui_registry_token,
-        'GHCR_USER (variable)': auth_ui_registry_user
+        'GHCR_TOKEN (secret)': security_ui_registry_token,
+        'GHCR_USER (variable)': security_ui_registry_user
       } | dict2items | selectattr('value', 'equalto', '') | map(attribute='key') | list }}
   no_log: true
 
 - name: Check the required settings were passed in
   ansible.builtin.assert:
-    that: auth_ui_missing | length == 0
+    that: security_ui_missing | length == 0
     fail_msg: >-
       Missing in the homelab repo (Settings > Secrets and variables > Actions):
-      {{ auth_ui_missing | join(', ') }}. See docs/auth-ui.md.
+      {{ security_ui_missing | join(', ') }}. See docs/security-ui.md.
     quiet: true
 
 # ---- Docker on the VM (the template only has the guest agent; a no-op if auth_service ran first) ----
@@ -33,57 +33,64 @@
 
 - name: Log in to the registry
   community.docker.docker_login:
-    registry_url: "{{ auth_ui_registry }}"
-    username: "{{ auth_ui_registry_user }}"
-    password: "{{ auth_ui_registry_token }}"
+    registry_url: "{{ security_ui_registry }}"
+    username: "{{ security_ui_registry_user }}"
+    password: "{{ security_ui_registry_token }}"
   no_log: true
 
 # ---- The auth service must be reachable from this VM, or every API call from the UI fails ----
 - name: The auth service answers on the upstream address
   ansible.builtin.uri:
-    url: "{{ auth_ui_auth_upstream }}{{ auth_ui_auth_health_path }}"
+    url: "{{ security_ui_auth_upstream }}{{ security_ui_auth_health_path }}"
     return_content: true
-  register: auth_ui_upstream
-  failed_when: auth_ui_upstream.status != 200 or (auth_ui_upstream.json | default({})).status | default('') != 'UP'
+  register: security_ui_upstream
+  failed_when: security_ui_upstream.status != 200 or (security_ui_upstream.json | default({})).status | default('') != 'UP'
 
 # ---- nginx config + container ----
 - name: Config folder
   ansible.builtin.file:
-    path: "{{ auth_ui_config_dir }}"
+    path: "{{ security_ui_config_dir }}"
     state: directory
     mode: "0755"
 
 - name: Render nginx.conf
   ansible.builtin.template:
     src: nginx.conf.j2
-    dest: "{{ auth_ui_config_dir }}/nginx.conf"
+    dest: "{{ security_ui_config_dir }}/nginx.conf"
     mode: "0644"
-  register: auth_ui_conf
+  register: security_ui_conf
+
+# Rename cleanup: a no-op once the old container is gone.
+- name: Remove containers left under old names
+  community.docker.docker_container:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ security_ui_old_container_names }}"
 
 # pull: always -> a new image under the same tag replaces the container.
 # A bind-mounted file changing does not recreate a container by itself, hence `restart`.
-- name: Run the auth UI
+- name: Run the security UI
   community.docker.docker_container:
-    name: "{{ auth_ui_container_name }}"
-    image: "{{ auth_ui_image }}"
+    name: "{{ security_ui_container_name }}"
+    image: "{{ security_ui_image }}"
     pull: always
     state: started
-    restart: "{{ auth_ui_conf.changed }}"
+    restart: "{{ security_ui_conf.changed }}"
     restart_policy: unless-stopped
-    memory: "{{ auth_ui_memory }}"
+    memory: "{{ security_ui_memory }}"
     published_ports:
-      - "{{ auth_ui_port }}:80"
+      - "{{ security_ui_port }}:80"
     volumes:
-      - "{{ auth_ui_config_dir }}/nginx.conf:/etc/nginx/conf.d/default.conf:ro"
+      - "{{ security_ui_config_dir }}/nginx.conf:/etc/nginx/conf.d/default.conf:ro"
 
 - name: Wait until the UI is served
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ auth_ui_port }}/"
+    url: "http://127.0.0.1:{{ security_ui_port }}/"
     status_code: 200
-  register: auth_ui_health
-  until: auth_ui_health.status == 200
-  retries: "{{ auth_ui_health_retries }}"
-  delay: "{{ auth_ui_health_delay }}"
+  register: security_ui_health
+  until: security_ui_health.status == 200
+  retries: "{{ security_ui_health_retries }}"
+  delay: "{{ security_ui_health_delay }}"
 
 - name: Remove dangling images left by earlier deploys
   community.docker.docker_prune:

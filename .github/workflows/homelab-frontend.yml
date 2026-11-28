@@ -12,9 +12,9 @@ on:
         description: "App to deploy"
         required: true
         type: choice
-        default: auth-ui
+        default: security-ui
         options:
-          - auth-ui    # security (superadmin) UI -> k8s-w1 (docs/auth-ui.md)
+          - security-ui    # security (superadmin) UI -> k8s-w1 (docs/security-ui.md)
 
 permissions:
   contents: read

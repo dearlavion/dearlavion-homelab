@@ -1,23 +1,23 @@
-# Auth UI → k8s-w1 (Docker)
+# Security UI → k8s-w1 (Docker)
 
-Workflow: **Actions → homelab-frontend → Run workflow → app `auth-ui`**
+Workflow: **Actions → homelab-frontend → Run workflow → app `security-ui`**
 (or push to `dev` in `dearlavion-security-ui`, whose `homelab-dev.yml` triggers it).
 
 ```
 UI repo push to dev ─► homelab-dev.yml: build image ghcr.io/dearlavion/dearlavion-security-ui:homelab
                           └─ gh workflow run homelab-frontend.yml (needs HOMELAB_DISPATCH_TOKEN)
-homelab-frontend ─► vm-runner: docker run toolbox ─► ansible playbook/frontend.yml -e app=auth-ui
+homelab-frontend ─► vm-runner: docker run toolbox ─► ansible playbook/frontend.yml -e app=security-ui
    SSH ubuntu@<NET_PREFIX>.101 (k8s-w1): install Docker (if missing) → docker login ghcr.io
-   → check the auth service answers /actuator/health = UP → render /etc/auth-ui/nginx.conf
-   → docker run auth-ui  -p 8080:80  (nginx.conf mounted over the image's) → wait for HTTP 200
+   → check the auth service answers /actuator/health = UP → render /etc/security-ui/nginx.conf
+   → docker run security-ui  -p 8080:80  (nginx.conf mounted over the image's) → wait for HTTP 200
 ```
 
 ## How the browser reaches the API
 The browser only talks to this container (same origin, which the refresh cookie needs).
 nginx forwards `/api/v1/auth/` and `/api/v1/superadmin/` to the auth service. The image's own
 `nginx.conf` hardcodes the host `auth`, so the role renders its own from
-`roles/auth_ui/templates/nginx.conf.j2` and mounts it. The upstream defaults to the auth
-container on the same VM (`http://<VM IP>:9081`); change `auth_ui_auth_upstream` if it moves.
+`roles/security_ui/templates/nginx.conf.j2` and mounts it. The upstream defaults to the auth
+container on the same VM (`http://<VM IP>:9081`); change `security_ui_auth_upstream` if it moves.
 
 ## One-time setup
 Needs `GHCR_TOKEN` (secret) and `GHCR_USER` (variable) in the homelab repo, the same ones
@@ -36,5 +36,5 @@ Over plain HTTP the session cookie works because the auth service runs with
 `SESSION_COOKIE_SECURE=false`. Behind HTTPS, set it to `true`.
 
 ```bash
-ssh ubuntu@192.168.8.101 'sudo docker logs --tail 50 auth-ui'
+ssh ubuntu@192.168.8.101 'sudo docker logs --tail 50 security-ui'
 ```
