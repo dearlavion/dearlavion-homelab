@@ -1,0 +1,14 @@
+---
+# Wait for SSH, with an error that says which VM is down and what to check.
+- name: Reach the VM
+  block:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: "{{ k3s_ssh_timeout | default(60) }}"
+  rescue:
+    - name: The VM cannot be reached
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: {{ k3s_role_label }} {{ k3s_vm_name }} ({{ ansible_host }}) is not reachable over
+          SSH. Check that the VM is running in Proxmox and that the runner's SSH key can log in as
+          {{ ansible_user }}. Details: {{ ansible_failed_result.msg | default('none') }}

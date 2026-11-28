@@ -1,0 +1,20 @@
+---
+# Wait (asking the control plane) until node k3s_node is Ready.
+- name: Node readiness
+  block:
+    - name: "Wait until {{ k3s_node }} is Ready"
+      ansible.builtin.command: k3s kubectl wait --for=condition=Ready node/{{ k3s_node }} --timeout=10s
+      delegate_to: k3s-server
+      register: k3s_wait
+      until: k3s_wait.rc == 0
+      retries: "{{ k3s_ready_retries }}"
+      delay: "{{ k3s_ready_delay }}"
+      changed_when: false
+  rescue:
+    - name: The node did not become Ready
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: node {{ k3s_node }} did not become Ready. Check that its VM and k3s service are
+          running. Logs: sudo journalctl -u k3s -n 50 (control plane) or
+          sudo journalctl -u k3s-agent -n 50 (worker). Details:
+          {{ ansible_failed_result.stderr | default(ansible_failed_result.msg | default('none'), true) }}

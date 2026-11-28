@@ -1,0 +1,29 @@
+---
+# status / worker-only actions: k3s must be installed and running. k3s_service: k3s | k3s-agent
+- name: Is k3s installed?
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ k3s_service }}.service"
+  register: k3s_check_unit
+
+- name: k3s must be installed
+  ansible.builtin.assert:
+    that: k3s_check_unit.stat.exists
+    fail_msg: >-
+      ERROR: k3s is not installed yet on {{ k3s_role_label }} {{ k3s_vm_name }}. Run action=install
+      (for a worker, pick it in the workers dropdown).
+    quiet: true
+
+- name: Is the service running?
+  ansible.builtin.command: systemctl is-active {{ k3s_service }}
+  register: k3s_check_active
+  changed_when: false
+  failed_when: false
+
+- name: The service must be running
+  ansible.builtin.assert:
+    that: k3s_check_active.stdout == 'active'
+    fail_msg: >-
+      ERROR: {{ k3s_service }} is not running on {{ k3s_role_label }} {{ k3s_vm_name }} (state:
+      {{ k3s_check_active.stdout | default('unknown', true) }}). Try action=restart with
+      target={{ k3s_vm_name }}. Logs on that VM: sudo journalctl -u {{ k3s_service }} -n 50
+    quiet: true

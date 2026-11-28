@@ -4,10 +4,17 @@
 # any number of agents (workers). VMs are addressed as <net_prefix>.<vm_id>, like Terraform does.
 
 # ---- Which VMs ----
-k3s_server_vm_id: 100                      # k8s-cp
-# Start with k8s-w2 only: k8s-w1 still runs the auth containers in Docker, and Docker's firewall
-# rules can break pod networking. Add 101 here after those containers are gone.
-k3s_agent_vm_ids: [102]                    # k8s-w2
+# Name -> VM ID (keep in sync with locals.vms in terraform/main.tf).
+k3s_controllers:
+  k8s-cp: 100
+k3s_workers:
+  k8s-w1: 101
+  k8s-w2: 102
+# Used when -e controller / -e workers are not given. workers is one name from k3s_workers, or "all".
+# k8s-w2 is the default because k8s-w1 still runs the auth containers in Docker, and Docker's
+# firewall rules can break pod networking.
+k3s_default_controller: k8s-cp
+k3s_default_workers: k8s-w2
 k3s_vm_user: ubuntu
 
 # ---- Version ----
@@ -24,3 +31,4 @@ k3s_server_extra_args: ""                  # e.g. "--disable traefik" to drop th
 k3s_node_token_file: /var/lib/rancher/k3s/server/node-token
 k3s_ready_retries: 30
 k3s_ready_delay: 10
+k3s_drain_timeout: 120s               # redeploy of a worker

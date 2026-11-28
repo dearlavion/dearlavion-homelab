@@ -1,0 +1,47 @@
+---
+# restart / redeploy: checks on a worker. Changes nothing apart from downloading the install script.
+- name: Is the k3s agent installed here?
+  ansible.builtin.stat:
+    path: /etc/systemd/system/k3s-agent.service
+  register: k3s_agent_unit
+
+# A worker picked by name must be restartable (installed); redeploy may also repair a missing one.
+# With all / all-workers, workers that never joined are skipped.
+- name: Decide whether this worker is included
+  ansible.builtin.set_fact:
+    k3s_selected: "{{ k3s_agent_unit.stat.exists or k3s_named_target }}"
+
+- name: A worker picked for restart must have k3s installed
+  ansible.builtin.assert:
+    that: k3s_agent_unit.stat.exists or not (k3s_selected | bool)
+    fail_msg: >-
+      ERROR: k3s is not installed yet on worker {{ inventory_hostname }}. Run action=install and
+      pick it in the workers dropdown.
+    quiet: true
+  when: operation == 'restart'
+
+# Redeploy uninstalls first, so everything that could block the reinstall is checked now.
+- name: Checks before redeploying this worker
+  when: operation == 'redeploy' and (k3s_selected | bool)
+  block:
+    - name: Look for running Docker containers
+      ansible.builtin.shell: |
+        if command -v docker >/dev/null; then
+          docker ps --format '{{ '{{' }}.Names{{ '}}' }}'
+        fi
+      register: k3s_agent_containers
+      changed_when: false
+
+    - name: Stop if this VM is running Docker containers
+      ansible.builtin.assert:
+        that: k3s_agent_containers.stdout | length == 0
+        fail_msg: >-
+          {{ inventory_hostname }} is running Docker containers
+          ({{ k3s_agent_containers.stdout_lines | join(', ') }}). Nothing was removed.
+        quiet: true
+
+    - name: Check the install script can be downloaded
+      ansible.builtin.get_url:
+        url: "{{ k3s_install_script_url }}"
+        dest: "{{ k3s_install_script }}"
+        mode: "0755"

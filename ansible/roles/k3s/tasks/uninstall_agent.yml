@@ -1,0 +1,6 @@
+---
+# Removes k3s and its local data from a worker. Does nothing if it is not installed.
+- name: Uninstall the k3s agent
+  ansible.builtin.command:
+    cmd: /usr/local/bin/k3s-agent-uninstall.sh
+    removes: /usr/local/bin/k3s-agent-uninstall.sh

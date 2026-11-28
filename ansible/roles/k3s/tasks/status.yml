@@ -1,12 +1,26 @@
 ---
-# Runs on the server VM: every node should be Ready.
-- name: List the nodes
-  ansible.builtin.command: k3s kubectl get nodes -o wide
-  register: k3s_nodes
-  until: k3s_nodes.rc == 0 and (k3s_nodes.stdout_lines | length - 1) == (1 + k3s_agent_vm_ids | length) and 'NotReady' not in k3s_nodes.stdout
-  retries: "{{ k3s_ready_retries }}"
-  delay: "{{ k3s_ready_delay }}"
-  changed_when: false
+# Runs on the server VM: the controller and selected workers must be listed and Ready, and no node
+# may be NotReady. Other nodes already in the cluster are fine.
+- name: Check the nodes
+  block:
+    - name: List the nodes
+      ansible.builtin.command: k3s kubectl get nodes -o wide
+      register: k3s_nodes
+      until: >-
+        k3s_nodes.rc == 0 and 'NotReady' not in k3s_nodes.stdout and
+        (k3s_expected_nodes | difference(k3s_nodes.stdout_lines
+          | select('search', '\\sReady\\s') | map('split') | map('first') | list)) | length == 0
+      retries: "{{ k3s_ready_retries }}"
+      delay: "{{ k3s_ready_delay }}"
+      changed_when: false
+  rescue:
+    - name: Some nodes are not running
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: expected these nodes to be Ready: {{ k3s_expected_nodes | join(', ') }}, and no
+          node NotReady. For each missing or NotReady node, check that the VM is running and k3s is
+          installed and started. Current nodes: {{ k3s_nodes.stdout_lines | default([]) | join(' / ')
+          if k3s_nodes.stdout | default('') else k3s_nodes.stderr | default('could not list nodes', true) }}
 
 - name: Show the nodes
   ansible.builtin.debug:

@@ -14,8 +14,42 @@ on:
         type: choice
         default: install
         options:
-          - install    # install/update k3s: server on k8s-cp, agents on the VMs in k3s_agent_vm_ids
+          - install    # install k3s: server on the controller, agents on the selected workers
           - status     # show nodes and system pods, change nothing
+          - restart    # restart the k3s service on the target (not the VM)
+          - redeploy   # uninstall + reinstall k3s on the target (DELETES its k3s data)
+      controller:
+        description: "Control plane VM"
+        required: true
+        type: choice
+        default: k8s-cp
+        options:
+          - k8s-cp
+      workers:
+        description: "install/status: worker VM(s). Move Docker containers off k8s-w1 before choosing it or all"
+        required: true
+        type: choice
+        default: k8s-w2
+        options:
+          - k8s-w2
+          - k8s-w1
+          - all
+      target:
+        description: "restart/redeploy only: what to act on (redeploy k8s-cp only via all)"
+        required: true
+        type: choice
+        default: k8s-w2
+        options:
+          - k8s-w2
+          - k8s-w1
+          - all-workers
+          - k8s-cp
+          - all
+      confirm:
+        description: "redeploy only: type redeploy"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -63,6 +97,7 @@ jobs:
       - name: Run playbook/kubernetes.yml (${{ inputs.action }})
         env:
           STATE_DIR: /var/lib/homelab-state
+          CONFIRM: ${{ inputs.confirm }}   # free text: passed as a variable, never pasted into the script
         run: |
           docker run --rm --network host \
             -v "$GITHUB_WORKSPACE":/work \
@@ -70,6 +105,10 @@ jobs:
             -v "$HOME/.ssh":/ssh-ro:ro \
             -e PLAYBOOK=kubernetes \
             -e ACTION='${{ inputs.action }}' \
+            -e CONTROLLER='${{ inputs.controller }}' \
+            -e WORKERS='${{ inputs.workers }}' \
+            -e K3S_TARGET='${{ inputs.target }}' \
+            -e CONFIRM \
             -e TF_VAR_net_prefix='${{ vars.NET_PREFIX }}' \
             -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
             "$IMAGE:$TOOLBOX_TAG" \

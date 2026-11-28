@@ -1,0 +1,47 @@
+---
+# Redeploy one worker while the control plane stays: drain, uninstall, forget, join again.
+# If the drain fails, the node is made schedulable again and nothing is removed.
+- name: Is the node registered in the cluster?
+  ansible.builtin.command: k3s kubectl get node {{ inventory_hostname }} --ignore-not-found -o name
+  delegate_to: k3s-server
+  register: k3s_node_object
+  changed_when: false
+
+- name: Move pods off the node
+  when: k3s_node_object.stdout | length > 0
+  block:
+    - name: Drain the node
+      ansible.builtin.command: >-
+        k3s kubectl drain {{ inventory_hostname }}
+        --ignore-daemonsets --delete-emptydir-data --timeout={{ k3s_drain_timeout }}
+      delegate_to: k3s-server
+  rescue:
+    - name: Make the node schedulable again
+      ansible.builtin.command: k3s kubectl uncordon {{ inventory_hostname }}
+      delegate_to: k3s-server
+
+    - name: Stop because the drain failed
+      ansible.builtin.fail:
+        msg: "Could not drain {{ inventory_hostname }}. k3s was not removed from it."
+
+- name: Uninstall
+  ansible.builtin.include_tasks: uninstall_agent.yml
+
+# Without this the server rejects the reinstalled node (old node password).
+- name: Remove the old node entry
+  ansible.builtin.command: k3s kubectl delete node {{ inventory_hostname }} --ignore-not-found
+  delegate_to: k3s-server
+
+- name: Remove the old node password
+  ansible.builtin.command: >-
+    k3s kubectl delete secret {{ inventory_hostname }}.node-password.k3s
+    -n kube-system --ignore-not-found
+  delegate_to: k3s-server
+
+- name: Install and join again
+  ansible.builtin.include_tasks: agent.yml
+
+- name: Wait for the node
+  ansible.builtin.include_tasks: wait_ready.yml
+  vars:
+    k3s_node: "{{ inventory_hostname }}"

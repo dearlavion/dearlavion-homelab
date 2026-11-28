@@ -4,9 +4,15 @@
 #   TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/kubernetes.yml -e operation=install
 #   TF_VAR_net_prefix=192.168.8 ansible-playbook playbook/kubernetes.yml -e operation=status
 #
-# Which VMs: roles/k3s/defaults/main.yml (k3s_server_vm_id, k3s_agent_vm_ids). The VMs are added
-# by IP (net prefix + VM ID), so no Terraform run is needed. Idempotent: install can be re-run to
-# add an agent (add its VM ID to k3s_agent_vm_ids).
+# Which VMs: -e controller=k8s-cp -e workers=k8s-w2|k8s-w1|all (names and defaults in
+# roles/k3s/defaults/main.yml). The VMs are added by IP (net prefix + VM ID), so no Terraform run
+# is needed. Idempotent: install can be re-run with another worker to add it. Workers that are not
+# selected are left as they are (never removed).
+#
+# restart / redeploy use -e target=k8s-cp|k8s-w1|k8s-w2|all-workers|all instead of workers:
+#   restart   restarts the k3s service (not the VM), control plane first, workers one at a time.
+#   redeploy  uninstalls and reinstalls k3s (that node's k3s data is LOST). Needs -e confirm=redeploy.
+#             k8s-cp cannot be redeployed alone: target=all rebuilds an EMPTY cluster.
 
 - name: Locate the cluster VMs
   hosts: localhost
@@ -19,44 +25,109 @@
   vars:
     _operation: "{{ operation | default('') }}"
     _net_prefix: "{{ lookup('env', 'TF_VAR_net_prefix') }}"
+    _controller: "{{ controller | default(k3s_default_controller, true) }}"
+    _workers: "{{ workers | default(k3s_default_workers, true) }}"
+    _worker_names: "{{ k3s_workers.keys() | list if _workers == 'all' else [_workers] }}"
+    _maintenance: "{{ _operation in ['restart', 'redeploy'] }}"
+    _target: "{{ target | default('', true) }}"
+    _target_workers: >-
+      {{ k3s_workers.keys() | list if _target in ['all', 'all-workers']
+         else ([_target] if _target in k3s_workers else []) }}
 
   tasks:
     - name: Check the operation and network prefix
       ansible.builtin.assert:
         that:
-          - _operation in ['install', 'status']
+          - _operation in ['install', 'status', 'restart', 'redeploy']
           - _net_prefix | length > 0
         fail_msg: >-
-          Pass -e operation=install|status and set TF_VAR_net_prefix (e.g. 192.168.8).
+          Pass -e operation=install|status|restart|redeploy and set TF_VAR_net_prefix (e.g. 192.168.8).
           Got operation='{{ _operation }}', net prefix='{{ _net_prefix }}'.
         quiet: true
+
+    - name: Check the selected VMs
+      ansible.builtin.assert:
+        that:
+          - _controller in k3s_controllers
+          - _workers == 'all' or _workers in k3s_workers
+        fail_msg: >-
+          controller must be one of {{ k3s_controllers.keys() | list }} and workers one of
+          {{ k3s_workers.keys() | list + ['all'] }}.
+          Got controller='{{ _controller }}', workers='{{ _workers }}'.
+        quiet: true
+
+    - name: Check the target
+      ansible.builtin.assert:
+        that: _target in k3s_controllers or _target in k3s_workers or _target in ['all', 'all-workers']
+        fail_msg: >-
+          {{ _operation }} needs -e target={{ (k3s_controllers.keys() | list
+          + k3s_workers.keys() | list + ['all-workers', 'all']) | join('|') }}. Got '{{ _target }}'.
+        quiet: true
+      when: _maintenance | bool
+
+    - name: Check the redeploy request
+      ansible.builtin.assert:
+        that:
+          - confirm | default('') == 'redeploy'
+          - _target not in k3s_controllers
+        fail_msg: >-
+          redeploy deletes k3s data: pass confirm=redeploy (workflow field "confirm").
+          The control plane cannot be redeployed alone, because joined workers would be cut off:
+          use target=all, which rebuilds an EMPTY cluster.
+        quiet: true
+      when: _operation == 'redeploy'
 
     - name: Add the server VM
       ansible.builtin.add_host:
         name: k3s-server
         groups: k3s_server
-        ansible_host: "{{ _net_prefix }}.{{ k3s_server_vm_id }}"
+        ansible_host: "{{ _net_prefix }}.{{ k3s_controllers[_controller] }}"
         ansible_user: "{{ k3s_vm_user }}"
-        k3s_server_ip: "{{ _net_prefix }}.{{ k3s_server_vm_id }}"
+        k3s_server_ip: "{{ _net_prefix }}.{{ k3s_controllers[_controller] }}"
+        k3s_expected_nodes: "{{ [_controller] + _worker_names }}"
+        k3s_server_name: "{{ _controller }}"
 
     - name: Add the agent VMs
       ansible.builtin.add_host:
-        name: "k3s-agent-{{ item }}"
+        name: "{{ item }}"
         groups: k3s_agents
-        ansible_host: "{{ _net_prefix }}.{{ item }}"
+        ansible_host: "{{ _net_prefix }}.{{ k3s_workers[item] }}"
         ansible_user: "{{ k3s_vm_user }}"
-        k3s_server_ip: "{{ _net_prefix }}.{{ k3s_server_vm_id }}"
-      loop: "{{ k3s_agent_vm_ids }}"
+        k3s_server_ip: "{{ _net_prefix }}.{{ k3s_controllers[_controller] }}"
+      loop: "{{ _worker_names }}"
+      when: not (_maintenance | bool)
+
+    - name: Remember what restart / redeploy includes
+      ansible.builtin.add_host:
+        name: k3s-server
+        k3s_controller_name: "{{ _controller }}"
+        k3s_include_server: "{{ _target == 'all' or _target in k3s_controllers }}"
+      when: _maintenance | bool
+
+    - name: Add the targeted workers (restart / redeploy)
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: k3s_maint
+        ansible_host: "{{ _net_prefix }}.{{ k3s_workers[item] }}"
+        ansible_user: "{{ k3s_vm_user }}"
+        k3s_server_ip: "{{ _net_prefix }}.{{ k3s_controllers[_controller] }}"
+        k3s_named_target: "{{ _target == item }}"
+      loop: "{{ _target_workers if _maintenance | bool else [] }}"
 
 - name: k3s server (control plane)
   hosts: k3s_server
   gather_facts: false
   become: true
+  any_errors_fatal: true
 
   tasks:
-    - name: Wait for SSH
-      ansible.builtin.wait_for_connection:
-        timeout: 60
+    - name: Check the VM is reachable
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: wait_reachable
+      vars:
+        k3s_role_label: control plane
+        k3s_vm_name: "{{ hostvars['k3s-server'].k3s_server_name }}"
 
     - name: Install the server
       ansible.builtin.include_role:
@@ -64,15 +135,29 @@
         tasks_from: server
       when: operation == 'install'
 
+    - name: status - the control plane must be running
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: check_service
+      vars:
+        k3s_service: k3s
+        k3s_role_label: control plane
+        k3s_vm_name: "{{ k3s_server_name }}"
+      when: operation == 'status'
+
 - name: k3s agents (workers)
   hosts: k3s_agents
   gather_facts: false
   become: true
 
   tasks:
-    - name: Wait for SSH
-      ansible.builtin.wait_for_connection:
-        timeout: 60
+    - name: Check the VM is reachable
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: wait_reachable
+      vars:
+        k3s_role_label: worker
+        k3s_vm_name: "{{ inventory_hostname }}"
 
     - name: Install the agent
       ansible.builtin.include_role:
@@ -81,6 +166,155 @@
       vars:
         k3s_join_token: "{{ hostvars['k3s-server'].k3s_join_token }}"
       when: operation == 'install'
+
+    - name: status - the worker must be running
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: check_service
+      vars:
+        k3s_service: k3s-agent
+        k3s_role_label: worker
+        k3s_vm_name: "{{ inventory_hostname }}"
+      when: operation == 'status'
+
+# ---- restart / redeploy ----
+# any_errors_fatal everywhere: one failure stops the whole run, so nothing else gets touched.
+- name: Check the targeted workers
+  hosts: k3s_maint
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+
+  tasks:
+    - name: Check the VM is reachable
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: wait_reachable
+      vars:
+        k3s_role_label: worker
+        k3s_vm_name: "{{ inventory_hostname }}"
+
+    - name: Worker checks
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: preflight_agent
+
+- name: Check the control plane
+  hosts: k3s_server
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+
+  tasks:
+    - name: Control plane checks
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: preflight_server
+      when: operation in ['restart', 'redeploy']
+
+- name: Restart the control plane
+  hosts: k3s_server
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+
+  tasks:
+    - name: Restart k3s
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: restart
+      vars:
+        k3s_service: k3s
+        k3s_node: "{{ k3s_controller_name }}"
+      when: operation == 'restart' and k3s_include_server
+
+- name: Restart workers, one at a time
+  hosts: k3s_maint
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  serial: 1
+
+  tasks:
+    - name: Restart k3s-agent
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: restart
+      vars:
+        k3s_service: k3s-agent
+        k3s_node: "{{ inventory_hostname }}"
+      when: operation == 'restart' and (k3s_selected | bool)
+
+- name: Redeploy everything - remove the workers
+  hosts: k3s_maint
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+
+  tasks:
+    - name: Uninstall the agent
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: uninstall_agent
+      when: >-
+        operation == 'redeploy' and hostvars['k3s-server'].k3s_include_server
+        and (k3s_selected | bool)
+
+- name: Redeploy everything - new control plane
+  hosts: k3s_server
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+
+  tasks:
+    - name: Uninstall the server (DELETES the cluster)
+      ansible.builtin.command:
+        cmd: /usr/local/bin/k3s-uninstall.sh
+        removes: /usr/local/bin/k3s-uninstall.sh
+      when: operation == 'redeploy' and k3s_include_server
+
+    - name: Install the server again
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: server
+      when: operation == 'redeploy' and k3s_include_server
+
+- name: Redeploy workers, one at a time
+  hosts: k3s_maint
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  serial: 1
+
+  tasks:
+    - name: Join the new cluster
+      when: >-
+        operation == 'redeploy' and hostvars['k3s-server'].k3s_include_server
+        and (k3s_selected | bool)
+      vars:
+        k3s_join_token: "{{ hostvars['k3s-server'].k3s_join_token }}"
+      block:
+        - name: Install the agent again
+          ansible.builtin.include_role:
+            name: k3s
+            tasks_from: agent
+
+        - name: Wait for the node
+          ansible.builtin.include_role:
+            name: k3s
+            tasks_from: wait_ready
+          vars:
+            k3s_node: "{{ inventory_hostname }}"
+
+    - name: Redeploy this worker
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: redeploy_agent
+      vars:
+        k3s_join_token: "{{ hostvars['k3s-server'].k3s_join_token }}"
+      when: >-
+        operation == 'redeploy' and not hostvars['k3s-server'].k3s_include_server
+        and (k3s_selected | bool)
 
 - name: Cluster status
   hosts: k3s_server

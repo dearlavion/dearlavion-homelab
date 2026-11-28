@@ -1,0 +1,18 @@
+---
+# Restart the k3s service (not the VM) and wait for the node. k3s_service: k3s | k3s-agent
+- name: Restart the service
+  block:
+    - name: "Restart {{ k3s_service }}"
+      ansible.builtin.service:
+        name: "{{ k3s_service }}"
+        state: restarted
+  rescue:
+    - name: The service did not restart
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: {{ k3s_service }} failed to restart on {{ k3s_node }}. Logs on that VM:
+          sudo journalctl -u {{ k3s_service }} -n 50. Details:
+          {{ ansible_failed_result.msg | default('none') }}
+
+- name: Wait for the node
+  ansible.builtin.include_tasks: wait_ready.yml

@@ -1,5 +1,23 @@
 ---
 # Worker. Runs on each agent VM, as root. Needs k3s_join_token from the server play.
+# Docker's firewall rules can break pod networking: don't join a VM that is running containers.
+- name: Look for running Docker containers (only before the first install)
+  ansible.builtin.shell: |
+    if [ ! -e /etc/systemd/system/k3s-agent.service ] && command -v docker >/dev/null; then
+      docker ps --format '{{ '{{' }}.Names{{ '}}' }}'
+    fi
+  register: k3s_agent_containers
+  changed_when: false
+
+- name: Stop if this VM is running Docker containers
+  ansible.builtin.assert:
+    that: k3s_agent_containers.stdout | length == 0
+    fail_msg: >-
+      {{ inventory_hostname }} is running Docker containers
+      ({{ k3s_agent_containers.stdout_lines | join(', ') }}). Move them off this VM, then run
+      install again (docs/kubernetes.md).
+    quiet: true
+
 - name: Download the k3s install script
   ansible.builtin.get_url:
     url: "{{ k3s_install_script_url }}"

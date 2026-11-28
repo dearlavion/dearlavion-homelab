@@ -1,0 +1,12 @@
+---
+# Runs on the server VM. Agents need the token to join. Kept in memory only, never printed.
+- name: Read the join token
+  ansible.builtin.slurp:
+    src: "{{ k3s_node_token_file }}"
+  register: k3s_token_raw
+  no_log: true
+
+- name: Remember the join token for the agents
+  ansible.builtin.set_fact:
+    k3s_join_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+  no_log: true

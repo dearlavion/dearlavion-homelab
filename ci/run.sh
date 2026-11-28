@@ -15,6 +15,11 @@ TARGET="${TARGET:-infra}"       # infra playbook
 SERVICE="${SERVICE:-}"          # services playbook
 APP="${APP:-}"                  # frontend playbook
 ACTION="${ACTION:-}"            # kubernetes and tunnel playbooks
+CONTROLLER="${CONTROLLER:-}"    # kubernetes playbook
+WORKERS="${WORKERS:-}"          # kubernetes playbook
+CONFIRM="${CONFIRM:-}"          # kubernetes playbook (redeploy)
+# kubernetes restart/redeploy sends its target in K3S_TARGET (TARGET belongs to the infra playbook)
+if [ "$PLAYBOOK" = kubernetes ]; then TARGET="${K3S_TARGET:-}"; fi
 
 # Docker runs as real root: hand files back to the runner user on exit,
 # otherwise the next actions/checkout cannot clean the workspace.
@@ -31,6 +36,9 @@ EXTRA_VARS=$(jq -nc \
   --arg service "$SERVICE" \
   --arg app "$APP" \
   --arg operation "$ACTION" \
+  --arg controller "$CONTROLLER" \
+  --arg workers "$WORKERS" \
+  --arg confirm "$CONFIRM" \
   --arg key "${VM_EXTRA_SSH_KEY:-}" \
   --argjson upgrade "${PVE_FULL_UPGRADE:-false}" \
   --argjson destroy "${ALLOW_DESTROY:-false}" \
@@ -41,6 +49,9 @@ EXTRA_VARS=$(jq -nc \
      service: $service,
      app: $app,
      operation: $operation,
+     controller: $controller,
+     workers: $workers,
+     confirm: $confirm,
      infra_tf_state_path: "/state/terraform.tfstate",
      infra_tf_token_file: "/state/pve-token.auto.tfvars",
      infra_full_upgrade: $upgrade,
