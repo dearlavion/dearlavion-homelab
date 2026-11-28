@@ -10,8 +10,9 @@
 # selected are left as they are (never removed).
 #
 # restart / redeploy use -e target=k8s-cp|k8s-w1|k8s-w2|all-workers|all instead of workers:
+#   Both need -e confirm=<the operation> (confirm=restart or confirm=redeploy).
 #   restart   restarts the k3s service (not the VM), control plane first, workers one at a time.
-#   redeploy  uninstalls and reinstalls k3s (that node's k3s data is LOST). Needs -e confirm=redeploy.
+#   redeploy  uninstalls and reinstalls k3s (that node's k3s data is LOST).
 #             k8s-cp cannot be redeployed alone: target=all rebuilds an EMPTY cluster.
 
 - name: Locate the cluster VMs
@@ -65,13 +66,20 @@
         quiet: true
       when: _maintenance | bool
 
+    # Checked before any VM is contacted. Exact match: the typed word must be the chosen action.
+    - name: restart / redeploy must be confirmed by typing the action
+      ansible.builtin.assert:
+        that: confirm | default('') == _operation
+        fail_msg: >-
+          ERROR: {{ _operation }} is not confirmed. Type {{ _operation }} in the "confirm" field
+          (-e confirm={{ _operation }}). Nothing was changed.
+        quiet: true
+      when: _maintenance | bool
+
     - name: Check the redeploy request
       ansible.builtin.assert:
-        that:
-          - confirm | default('') == 'redeploy'
-          - _target not in k3s_controllers
+        that: _target not in k3s_controllers
         fail_msg: >-
-          redeploy deletes k3s data: pass confirm=redeploy (workflow field "confirm").
           The control plane cannot be redeployed alone, because joined workers would be cut off:
           use target=all, which rebuilds an EMPTY cluster.
         quiet: true

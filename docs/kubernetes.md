@@ -9,7 +9,7 @@ Playbook: `ansible/playbook/kubernetes.yml`, role: `ansible/roles/k3s/`
 | `controller` | `k8s-cp` | `k8s-cp` |
 | `workers` (install, status) | `k8s-w2`, `k8s-w1`, `all` | `k8s-w2` |
 | `target` (restart, redeploy) | `k8s-w2`, `k8s-w1`, `all-workers`, `k8s-cp`, `all` | `k8s-w2` |
-| `confirm` (redeploy) | type `redeploy` | empty |
+| `confirm` (restart, redeploy) | type `restart` or `redeploy`, matching the action | empty |
 
 `install` sets up the controller (if needed) and the selected workers. It never removes a worker
 that you did not select. `status` checks that the controller and the selected workers are `Ready`,
@@ -33,6 +33,9 @@ rules can break pod networking. Move the services off it before joining it. `ins
 worker that has not joined yet and is running Docker containers (stopped containers are not detected).
 
 ## Restart and redeploy
+Both only run when `confirm` is exactly the chosen action (lowercase, no spaces). Otherwise the run
+fails before any VM is contacted. `install` and `status` ignore the field.
+
 With `all-workers` and `all`, workers that never joined are skipped. Workers are handled one at a
 time, and a failure stops the run.
 

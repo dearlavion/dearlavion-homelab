@@ -46,7 +46,7 @@ on:
           - k8s-cp
           - all
       confirm:
-        description: "redeploy only: type redeploy"
+        description: "restart/redeploy: type the action (restart or redeploy) to confirm"
         required: false
         type: string
         default: ""
