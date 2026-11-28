@@ -67,6 +67,8 @@ jobs:
           AUTH_JWT_SECRET: ${{ secrets.AUTH_JWT_SECRET }}
           AUTH_SERVICE_KEY: ${{ secrets.AUTH_SERVICE_KEY }}
           AUTH_PROVISION_SECRET: ${{ secrets.AUTH_PROVISION_SECRET }}
+          AUTH_SMTP_USERNAME: ${{ secrets.AUTH_SMTP_USERNAME }}
+          AUTH_SMTP_PASSWORD: ${{ secrets.AUTH_SMTP_PASSWORD }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USER: ${{ vars.GHCR_USER }}
         run: |
@@ -80,6 +82,7 @@ jobs:
             -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
             -e AUTH_MONGODB_URI -e AUTH_JWT_SECRET -e AUTH_SERVICE_KEY \
             -e AUTH_PROVISION_SECRET -e GHCR_TOKEN -e GHCR_USER \
+            -e AUTH_SMTP_USERNAME -e AUTH_SMTP_PASSWORD \
             "$IMAGE:$TOOLBOX_TAG" \
             bash /work/ci/run.sh
 

@@ -57,6 +57,11 @@
       SESSION_COOKIE_PATH: "{{ auth_service_session_cookie_path }}"
       SESSION_COOKIE_SECURE: "{{ auth_service_session_cookie_secure }}"
       FRONTEND_ORIGINS: "{{ auth_service_frontend_origins }}"
+      SMTP_HOST: "{{ auth_service_smtp_host }}"
+      SMTP_PORT: "{{ auth_service_smtp_port }}"
+      SMTP_USERNAME: "{{ auth_service_smtp_username }}"
+      SMTP_PASSWORD: "{{ auth_service_smtp_password }}"
+      SECURITY_RESET_URL: "{{ auth_service_security_reset_url }}"
       JAVA_TOOL_OPTIONS: "{{ auth_service_java_tool_options | trim }}"
   community.docker.docker_container:
     name: "{{ auth_service_container_name }}"

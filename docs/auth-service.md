@@ -21,6 +21,8 @@ tag `:dev`). This repo only pulls and runs it.
 | Secret | `AUTH_JWT_SECRET` | base64 HMAC key (same one other services verify with) |
 | Secret | `AUTH_SERVICE_KEY` | shared key for `/auth/internal/*` (can be empty) |
 | Secret | `AUTH_PROVISION_SECRET` | needed to create ADMIN/STAFF (can be empty) |
+| Secret | `AUTH_SMTP_USERNAME` | Gmail address that sends superadmin password reset emails (can be empty: no emails) |
+| Secret | `AUTH_SMTP_PASSWORD` | Gmail app password for that address, without spaces (can be empty: no emails) |
 | Secret | `GHCR_TOKEN` | **read-only** PAT with `read:packages` for the image |
 | Variable | `GHCR_USER` | GitHub user that owns that token |
 

@@ -30,11 +30,20 @@ auth_service_session_cookie_secure: "true"
 auth_service_frontend_origins: "https://security.travelbesty.store"
 auth_service_extra_env: {}                 # any other env var from the service README
 
+# ---- Superadmin password reset email (SMTP) ----
+auth_service_smtp_host: smtp.gmail.com
+auth_service_smtp_port: "587"
+# Page the emailed link opens. The app's own default points to localhost.
+auth_service_security_reset_url: "https://security.travelbesty.store/reset-password"
+
 # ---- Secrets: read from the CI container's environment (GitHub Actions secrets) ----
 auth_service_mongodb_uri: "{{ lookup('env', 'AUTH_MONGODB_URI') }}"
 auth_service_jwt_secret: "{{ lookup('env', 'AUTH_JWT_SECRET') }}"
 auth_service_service_key: "{{ lookup('env', 'AUTH_SERVICE_KEY') }}"
 auth_service_provision_secret: "{{ lookup('env', 'AUTH_PROVISION_SECRET') }}"   # optional
+# Optional: without both, the service runs but reset emails are not delivered.
+auth_service_smtp_username: "{{ lookup('env', 'AUTH_SMTP_USERNAME') }}"
+auth_service_smtp_password: "{{ lookup('env', 'AUTH_SMTP_PASSWORD') }}"
 
 # ---- GHCR login so the VM can pull the (private) image; use a read-only token ----
 auth_service_registry: ghcr.io
