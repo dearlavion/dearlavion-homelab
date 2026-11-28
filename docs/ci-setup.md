@@ -4,17 +4,17 @@ Workflows in `.github/workflows/` (all manual: **Actions → pick one → Run wo
 
 | File | Deploys | Dropdown |
 |---|---|---|
-| `homelab-deploy-infra.yml` | Proxmox host, template, VMs. **Also builds the toolbox image.** | `target` (toolbox, infra, infra-vms:<vm>, rebuild:<vm>, ...) |
+| `homelab-deploy-infra.yml` | Proxmox host, template, VMs. Can force a toolbox rebuild. | `target` (toolbox, infra, infra-vms:<vm>, rebuild:<vm>, ...) |
 | `homelab-services.yml` | Backend services (Docker on a VM) | `service` (auth-service) |
 | `homelab-frontend.yml` | UIs (Docker, nginx + SPA) | `app` (security-ui) |
 | `homelab-cloudflare-tunnel.yml` | DNS + HTTPS for the UIs (Cloudflare Tunnel, see `docs/tunnel.md`) | `action` (apply, status) |
 | `homelab-kubernetes.yml` | k3s cluster (see `docs/kubernetes.md`) | `action` (install, status) |
 
-**Toolbox image** (Ansible + Terraform): owned by `homelab-deploy-infra`, tagged by a hash of
-`toolbox/`. Any infra choice builds it automatically **only if that tag is not in GHCR yet**
-(first run, or after `toolbox/` changed). Target `toolbox` forces a rebuild and deploys nothing.
-`homelab-services` does the same check and builds the image too if it is missing, so it works even
-if infra was never run. (`homelab-frontend` has the same job.)
+**Toolbox image** (Ansible + Terraform): built by the reusable workflow
+`build-toolbox.yml`, which every workflow above calls (you don't run it yourself).
+It is tagged by a hash of `toolbox/` and built **only if that tag is not in GHCR
+yet** (first run, or after `toolbox/` changed). In `homelab-deploy-infra`, target
+`toolbox` forces a rebuild and deploys nothing.
 
 All workflows share one `concurrency` group (`homelab-deploy`), so only one runs at a time.
 To add a service: add a role under `ansible/roles/`, a play in `playbook/services.yml`,
@@ -44,7 +44,7 @@ picks up jobs. No port forwarding, nothing exposed to the internet.
 ```
 Actions → pick a workflow → Run workflow
    │
-   ├─ Job 1  build-toolbox   (GitHub-hosted, ubuntu-latest)
+   ├─ Job 1  build-toolbox   (calls build-toolbox.yml; GitHub-hosted, ubuntu-latest)
    │          toolbox/Dockerfile → ghcr.io/dearlavion/dearlavion-homelab-toolbox:<hash of toolbox/>
    │          (built only if that tag is missing)
    │
